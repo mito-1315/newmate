@@ -4,29 +4,48 @@ An AI-powered certificate verification system that combines document understandi
 
 ## 🚀 Features
 
-- **AI-Powered Extraction**: Uses Donut model for intelligent field extraction from certificate images
-- **Fusion Engine**: Combines multiple verification methods (AI + legacy + database matching)
-- **Cryptographic Attestation**: ECDSA signatures and QR codes for tamper-proof verification
-- **Risk Scoring**: Multi-factor risk assessment with confidence metrics
-- **Manual Review**: Human-in-the-loop verification for edge cases
-- **Institution Management**: Support for multiple institutions with public key infrastructure
-- **Real-time Dashboard**: Analytics and monitoring for verification operations
-- **Supabase Integration**: Modern backend with PostgreSQL and real-time features
+### 3-Layer Verification Pipeline
+- **Layer 1 - Field Extraction**: Donut model + OCR ensemble + VLM fallback for robust field extraction
+- **Layer 2 - Image Forensics**: Copy-move detection, ELA analysis, noise patterns, hash integrity
+- **Layer 3 - Signature Verification**: YOLO-based seal/signature detection + Siamese CNN verification
+- **QR Integrity Controls**: ECDSA-signed QR codes with cryptographic verification
 
-## 🏗️ Architecture
+### Enhanced Security & Forensics
+- **Tamper Detection**: Multi-method forensic analysis for image manipulation detection
+- **Conservative Decision Engine**: High-confidence thresholds with automatic escalation
+- **Cryptographic Attestation**: Industry-standard digital signatures and PKI
+- **Hash Integrity**: SHA256 + perceptual hashing for image authentication
+
+### Production-Ready Features
+- **Parallel Processing**: All layers execute concurrently for optimal performance
+- **Manual Review Workflow**: Expert review queue with evidence visualization
+- **Institution Integration**: Multi-tenant system with secure APIs and bulk import
+- **Comprehensive Audit Trail**: Immutable verification logs with forensic metadata
+- **Real-time Dashboard**: Layer-by-layer analytics and risk monitoring
+
+## 🏗️ Enhanced 3-Layer Architecture
 
 ```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Enhanced Fusion Engine                      │
+│         Conservative Decision + Risk Assessment + Audit        │
+├─────────────┬─────────────┬─────────────┬───────────────────────┤
+│   Layer 1   │   Layer 2   │   Layer 3   │    QR Integrity       │
+│ Extraction  │  Forensics  │ Signatures  │     Controls          │
+│             │             │             │                       │
+│ • Donut AI  │ • Copy-Move │ • Seal Det. │ • ECDSA Signed        │
+│ • OCR       │ • ELA       │ • Sig. Ver. │ • Issuer Verify       │
+│ • VLM       │ • Hashing   │ • QR Scan   │ • Field Match         │
+└─────────────┴─────────────┴─────────────┴───────────────────────┘
+                              │
+                              ▼
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │   Frontend      │    │     Backend      │    │    Supabase     │
 │   (React)       │◄──►│   (FastAPI)      │◄──►│  (Database +    │
-│                 │    │                  │    │   Storage)      │
+│ • Layer Views   │    │ • 3-Layer API    │    │   Storage)      │
+│ • Evidence UI   │    │ • Parallel Proc  │    │ • Forensics     │
+│ • Review Queue  │    │ • Conservative   │    │ • Audit Trail   │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
-                              │
-                              ▼
-                       ┌──────────────┐
-                       │ AI Services  │
-                       │ (Donut/LLM)  │
-                       └──────────────┘
 ```
 
 ## 📋 Prerequisites
@@ -162,49 +181,58 @@ See `docs/api_contracts.md` for complete API documentation.
 - [x] React frontend skeleton
 - [x] Basic upload and verification flow
 
-### Week 2-3: AI Integration
-- [ ] Prepare dataset (200-500 labeled images)
-- [ ] Fine-tune Donut model for certificate extraction
-- [ ] Deploy extraction microservice
-- [ ] Integration with Supabase storage
+### Week 2-3: Layer 1 Implementation + Donut Fine-tuning
+- [ ] Prepare labeled dataset (200-500 certificate images)
+- [ ] Fine-tune Donut model for certificate schema output
+- [ ] Implement PaddleOCR + Tesseract ensemble fallback
+- [ ] Deploy Layer 1 extraction service with confidence thresholds
+- [ ] VLM integration for edge cases
 
-### Week 4: Attestation System
-- [ ] Generate ECDSA key pairs
-- [ ] Implement digital signatures
-- [ ] QR code generation and verification
-- [ ] PDF attestation generation
+### Week 4: QR Signing + Attestation Flow
+- [ ] ECDSA key generation and secure storage
+- [ ] QR payload signing with institution keys
+- [ ] Image fingerprinting (SHA256 + pHash + PRNU)
+- [ ] Attestation record creation with forensic metadata
+- [ ] Public verification endpoints with QR scanning
 
-### Week 5: Fusion Engine
-- [ ] Combine Donut + legacy model outputs
-- [ ] Database matching algorithm
-- [ ] Risk scoring implementation
-- [ ] Fusion endpoint deployment
+### Week 5: Fusion Engine + Forensic Integration
+- [ ] Complete Layer 2 forensic analysis implementation
+- [ ] Layer 3 YOLO training for seal/signature detection
+- [ ] Enhanced fusion scoring with conservative thresholds
+- [ ] Tamper detection integration with decision engine
+- [ ] Cross-layer consistency validation
 
-### Week 6: Manual Review
-- [ ] Review queue UI implementation
-- [ ] Reviewer workflow
-- [ ] Field correction interface
-- [ ] Attestation PDF generation
+### Week 6: Manual Review UI + Evidence Visualization
+- [ ] Review queue with layer-by-layer evidence display
+- [ ] Forensic heatmaps and suspicious region overlays
+- [ ] Reviewer workflow with field correction
+- [ ] Signed PDF attestation generation
+- [ ] QR code embedding in attestation documents
 
-### Week 7: Institution Onboarding
-- [ ] CSV import functionality
-- [ ] Institution public key management
-- [ ] Multi-tenant support
-- [ ] Bulk certificate upload
+### Week 7: Institution Onboarding + Multi-tenant Security
+- [ ] Institution key management and registration
+- [ ] Bulk CSV import with field mapping validation
+- [ ] mTLS API endpoints for secure integration
+- [ ] Public key verification and trust management
+- [ ] Row-level security implementation
 
-### Week 8: Production Deployment
-- [ ] End-to-end testing
-- [ ] Performance optimization
-- [ ] Security audit
-- [ ] Docker/K8s deployment
+### Week 8: Production Deployment + Security Audit
+- [ ] Comprehensive 3-layer integration testing
+- [ ] Performance optimization and GPU acceleration
+- [ ] Security audit and penetration testing
+- [ ] Docker/Kubernetes deployment with monitoring
+- [ ] Forensic evidence storage and compliance setup
 
-## 🔒 Security Features
+## 🔒 Enhanced Security Features
 
-- **Cryptographic Attestation**: ECDSA P-256 signatures
-- **Image Integrity**: SHA256 hashing and perceptual hashing
-- **Audit Trail**: Complete operation logging
-- **Rate Limiting**: API endpoint protection
-- **Row Level Security**: Multi-tenant data isolation
+- **3-Layer Forensic Analysis**: Multi-method tamper detection and evidence collection
+- **Conservative Decision Engine**: High-confidence thresholds with automatic escalation
+- **Cryptographic Attestation**: ECDSA P-256 signatures with PKI infrastructure
+- **Image Integrity**: SHA256 + perceptual hashing + PRNU fingerprinting
+- **QR Code Security**: Signed payloads with issuer verification
+- **Comprehensive Audit**: Immutable forensic evidence trail
+- **Multi-tenant Security**: Row-level security with institution isolation
+- **API Security**: mTLS, rate limiting, and access control
 
 ## 📊 Monitoring
 

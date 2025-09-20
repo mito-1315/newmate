@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line
+  PieChart, Pie, Cell, LineChart, Line, ScatterChart, Scatter
 } from 'recharts';
 import { 
   FileText, CheckCircle, XCircle, Clock, AlertTriangle, 
-  TrendingUp, Users, Award, Shield 
+  TrendingUp, Users, Award, Shield, Eye, Layers, Search
 } from 'lucide-react';
 
 const Dashboard = () => {
@@ -14,12 +14,18 @@ const Dashboard = () => {
     verified_certificates: 0,
     failed_verifications: 0,
     pending_reviews: 0,
+    tampered_certificates: 0,
     risk_distribution: [],
     daily_verifications: [],
-    institution_stats: []
+    institution_stats: [],
+    layer_performance: [],
+    forensic_detections: [],
+    recent_verifications: []
   });
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('7d'); // 7d, 30d, 90d
+  const [selectedVerification, setSelectedVerification] = useState(null);
+  const [showLayerDetails, setShowLayerDetails] = useState(false);
 
   useEffect(() => {
     fetchDashboardStats();
@@ -61,11 +67,11 @@ const Dashboard = () => {
       change: '+8%'
     },
     {
-      title: 'Failed Verifications',
-      value: stats.failed_verifications,
-      icon: XCircle,
+      title: 'Tampered Detected',
+      value: stats.tampered_certificates,
+      icon: Shield,
       color: 'bg-red-500',
-      change: '-3%'
+      change: '-15%'
     },
     {
       title: 'Pending Reviews',
@@ -135,11 +141,81 @@ const Dashboard = () => {
           })}
         </div>
 
-        {/* Charts Row */}
+        {/* Enhanced Analytics Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Daily Verifications Chart */}
+          {/* 3-Layer Performance Chart */}
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Daily Verifications</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900">3-Layer Performance</h3>
+              <button
+                onClick={() => setShowLayerDetails(!showLayerDetails)}
+                className="text-blue-600 hover:text-blue-700 text-sm flex items-center"
+              >
+                <Layers className="h-4 w-4 mr-1" />
+                {showLayerDetails ? 'Hide' : 'Show'} Details
+              </button>
+            </div>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={[
+                { layer: 'Layer 1\nExtraction', success_rate: 92, avg_time: 1.2 },
+                { layer: 'Layer 2\nForensics', success_rate: 88, avg_time: 2.8 },
+                { layer: 'Layer 3\nSignatures', success_rate: 85, avg_time: 1.5 },
+                { layer: 'QR\nIntegrity', success_rate: 96, avg_time: 0.3 }
+              ]}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="layer" />
+                <YAxis />
+                <Tooltip formatter={(value, name) => [
+                  name === 'success_rate' ? `${value}%` : `${value}s`,
+                  name === 'success_rate' ? 'Success Rate' : 'Avg Time'
+                ]} />
+                <Bar dataKey="success_rate" fill="#10b981" name="Success Rate" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Forensic Detection Chart */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Forensic Detections</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={[
+                    { name: 'Copy-Move', value: 12, color: '#ef4444' },
+                    { name: 'Double Compression', value: 8, color: '#f97316' },
+                    { name: 'Noise Inconsistency', value: 5, color: '#eab308' },
+                    { name: 'Hash Mismatch', value: 3, color: '#dc2626' },
+                    { name: 'Clean Images', value: 872, color: '#10b981' }
+                  ]}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => percent > 5 ? `${name} ${(percent * 100).toFixed(0)}%` : ''}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {[
+                    { name: 'Copy-Move', value: 12, color: '#ef4444' },
+                    { name: 'Double Compression', value: 8, color: '#f97316' },
+                    { name: 'Noise Inconsistency', value: 5, color: '#eab308' },
+                    { name: 'Hash Mismatch', value: 3, color: '#dc2626' },
+                    { name: 'Clean Images', value: 872, color: '#10b981' }
+                  ].map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Risk Distribution and Daily Trends */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Daily Verifications with Risk Overlay */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Daily Verifications & Risk Trends</h3>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={stats.daily_verifications}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -152,32 +228,41 @@ const Dashboard = () => {
                   stroke="#3b82f6" 
                   strokeWidth={2}
                   dot={{ fill: '#3b82f6' }}
+                  name="Total Verifications"
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="high_risk" 
+                  stroke="#ef4444" 
+                  strokeWidth={2}
+                  dot={{ fill: '#ef4444' }}
+                  name="High Risk"
                 />
               </LineChart>
             </ResponsiveContainer>
           </div>
 
-          {/* Risk Distribution Chart */}
+          {/* Risk vs Confidence Scatter */}
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Risk Level Distribution</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Risk vs Confidence Analysis</h3>
             <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={stats.risk_distribution}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="count"
-                >
-                  {stats.risk_distribution.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[entry.risk_level]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
+              <ScatterChart data={[
+                { risk: 0.1, confidence: 0.95, count: 45 },
+                { risk: 0.2, confidence: 0.88, count: 32 },
+                { risk: 0.3, confidence: 0.75, count: 28 },
+                { risk: 0.4, confidence: 0.65, count: 15 },
+                { risk: 0.6, confidence: 0.45, count: 8 },
+                { risk: 0.8, confidence: 0.25, count: 3 }
+              ]}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="risk" name="Risk Score" />
+                <YAxis dataKey="confidence" name="Confidence" />
+                <Tooltip formatter={(value, name) => [
+                  name === 'count' ? `${value} certificates` : `${(value * 100).toFixed(0)}%`,
+                  name === 'count' ? 'Count' : name
+                ]} />
+                <Scatter dataKey="count" fill="#8884d8" />
+              </ScatterChart>
             </ResponsiveContainer>
           </div>
         </div>
@@ -270,24 +355,142 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Recent Activity */}
+        {/* Enhanced Recent Activity with Evidence Overlays */}
         <div className="mt-8 bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium text-gray-900">Recent Verifications</h3>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setSelectedVerification(null)}
+                className="text-blue-600 hover:text-blue-700 text-sm flex items-center"
+              >
+                <Eye className="h-4 w-4 mr-1" />
+                Evidence View
+              </button>
+            </div>
+          </div>
+          
           <div className="space-y-4">
-            {[1, 2, 3, 4, 5].map((_, index) => (
-              <div key={index} className="flex items-center justify-between py-3 border-b border-gray-200 last:border-b-0">
-                <div className="flex items-center space-x-3">
-                  <CheckCircle className="h-5 w-5 text-green-500" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      Certificate verified for John Doe
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      University of Technology • Computer Science
-                    </p>
+            {[
+              {
+                id: 'ver_123',
+                student: 'John Doe',
+                institution: 'University of Technology',
+                course: 'Computer Science',
+                status: 'verified',
+                risk_level: 'low',
+                layers: {
+                  extraction: { confidence: 0.95, time: 1.2 },
+                  forensics: { tamper_prob: 0.1, time: 2.8 },
+                  signatures: { seals: 1, signatures: 1, time: 1.5 }
+                },
+                timestamp: '2 minutes ago'
+              },
+              {
+                id: 'ver_124',
+                student: 'Jane Smith',
+                institution: 'Tech Institute',
+                course: 'Data Science',
+                status: 'requires_review',
+                risk_level: 'medium',
+                layers: {
+                  extraction: { confidence: 0.78, time: 1.8 },
+                  forensics: { tamper_prob: 0.3, time: 3.2 },
+                  signatures: { seals: 0, signatures: 1, time: 1.1 }
+                },
+                timestamp: '5 minutes ago'
+              },
+              {
+                id: 'ver_125',
+                student: 'Mike Johnson',
+                institution: 'Engineering College',
+                course: 'Mechanical Engineering',
+                status: 'tampered',
+                risk_level: 'critical',
+                layers: {
+                  extraction: { confidence: 0.65, time: 2.1 },
+                  forensics: { tamper_prob: 0.85, time: 4.1 },
+                  signatures: { seals: 0, signatures: 0, time: 0.9 }
+                },
+                timestamp: '12 minutes ago'
+              }
+            ].map((verification, index) => (
+              <div 
+                key={index} 
+                className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                  selectedVerification?.id === verification.id 
+                    ? 'border-blue-300 bg-blue-50' 
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+                onClick={() => setSelectedVerification(verification)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    {verification.status === 'verified' && <CheckCircle className="h-5 w-5 text-green-500" />}
+                    {verification.status === 'requires_review' && <Clock className="h-5 w-5 text-yellow-500" />}
+                    {verification.status === 'tampered' && <Shield className="h-5 w-5 text-red-500" />}
+                    
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {verification.student} • {verification.status.replace('_', ' ').toUpperCase()}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {verification.institution} • {verification.course}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="text-right">
+                    <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
+                      verification.risk_level === 'low' ? 'bg-green-100 text-green-800' :
+                      verification.risk_level === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-red-100 text-red-800'
+                    }`}>
+                      {verification.risk_level.toUpperCase()}
+                    </span>
+                    <p className="text-xs text-gray-500 mt-1">{verification.timestamp}</p>
                   </div>
                 </div>
-                <span className="text-xs text-gray-500">2 minutes ago</span>
+
+                {/* Layer Performance Details */}
+                {selectedVerification?.id === verification.id && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Layer Analysis</h4>
+                    <div className="grid grid-cols-3 gap-4 text-xs">
+                      <div className="bg-blue-50 p-3 rounded">
+                        <div className="font-medium text-blue-900">Layer 1: Extraction</div>
+                        <div className="text-blue-700">Confidence: {(verification.layers.extraction.confidence * 100).toFixed(0)}%</div>
+                        <div className="text-blue-600">Time: {verification.layers.extraction.time}s</div>
+                      </div>
+                      
+                      <div className="bg-purple-50 p-3 rounded">
+                        <div className="font-medium text-purple-900">Layer 2: Forensics</div>
+                        <div className="text-purple-700">Tamper: {(verification.layers.forensics.tamper_prob * 100).toFixed(0)}%</div>
+                        <div className="text-purple-600">Time: {verification.layers.forensics.time}s</div>
+                      </div>
+                      
+                      <div className="bg-green-50 p-3 rounded">
+                        <div className="font-medium text-green-900">Layer 3: Signatures</div>
+                        <div className="text-green-700">Seals: {verification.layers.signatures.seals} | Sigs: {verification.layers.signatures.signatures}</div>
+                        <div className="text-green-600">Time: {verification.layers.signatures.time}s</div>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-4 flex space-x-2">
+                      <button className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">
+                        View Evidence
+                      </button>
+                      <button className="text-xs bg-gray-600 text-white px-3 py-1 rounded hover:bg-gray-700">
+                        Download Report
+                      </button>
+                      {verification.status === 'requires_review' && (
+                        <button className="text-xs bg-yellow-600 text-white px-3 py-1 rounded hover:bg-yellow-700">
+                          Review Now
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

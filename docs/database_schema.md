@@ -8,23 +8,38 @@ The certificate verifier uses Supabase (PostgreSQL) as the primary database with
 
 ### verifications
 
-Stores all certificate verification attempts and results.
+Stores all certificate verification attempts and results (enhanced for 3-layer analysis).
 
 ```sql
 CREATE TABLE verifications (
     id TEXT PRIMARY KEY,
-    status TEXT NOT NULL CHECK (status IN ('pending', 'verified', 'failed', 'requires_review')),
-    extracted_fields JSONB,
-    risk_score JSONB,
+    status TEXT NOT NULL CHECK (status IN ('pending', 'verified', 'failed', 'requires_review', 'tampered', 'signature_invalid')),
+    
+    -- Enhanced 3-layer results
+    layer_results JSONB,  -- Contains layer1_extraction, layer2_forensics, layer3_signatures, qr_integrity
+    risk_score JSONB,     -- Enhanced risk scoring with forensic analysis
     database_check JSONB,
+    integrity_checks JSONB,
+    
+    -- Decision engine outputs
+    decision_rationale TEXT,
+    auto_decision_confidence FLOAT,
+    escalation_reasons TEXT[],
+    
+    -- Review workflow
     requires_manual_review BOOLEAN DEFAULT FALSE,
     review_notes TEXT,
     reviewer_id TEXT,
+    
+    -- Processing metadata
     processed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    processing_time_total_ms FLOAT,
     image_url TEXT,
-    image_hash TEXT,
+    canonical_image_hash TEXT,
     original_filename TEXT,
     user_id TEXT,
+    
+    -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -33,7 +48,8 @@ CREATE TABLE verifications (
 CREATE INDEX idx_verifications_status ON verifications(status);
 CREATE INDEX idx_verifications_processed_at ON verifications(processed_at);
 CREATE INDEX idx_verifications_user_id ON verifications(user_id);
-CREATE INDEX idx_verifications_image_hash ON verifications(image_hash);
+CREATE INDEX idx_verifications_canonical_hash ON verifications(canonical_image_hash);
+CREATE INDEX idx_verifications_requires_review ON verifications(requires_manual_review);
 ```
 
 ### attestations
@@ -63,19 +79,29 @@ CREATE UNIQUE INDEX idx_attestations_verification_unique ON attestations(verific
 
 ### issued_certificates
 
-Database of known valid certificates from institutions.
+Database of known valid certificates from institutions (enhanced for issuance workflow).
 
 ```sql
 CREATE TABLE issued_certificates (
-    id SERIAL PRIMARY KEY,
+    id TEXT PRIMARY KEY,  -- Changed to TEXT for issuance_id
     certificate_id TEXT NOT NULL,
     student_name TEXT NOT NULL,
+    roll_no TEXT,
     course_name TEXT NOT NULL,
     institution TEXT NOT NULL,
+    institution_id TEXT REFERENCES institutions(id),
     issue_date DATE NOT NULL,
+    year TEXT,
     grade TEXT,
     additional_data JSONB,
-    institution_id TEXT REFERENCES institutions(id),
+    
+    -- Issuance workflow fields
+    status TEXT DEFAULT 'issued' CHECK (status IN ('issuing', 'issued', 'revoked', 'cancelled')),
+    image_url TEXT,
+    image_hashes JSONB,
+    attestation_id TEXT,
+    
+    -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     
@@ -87,6 +113,8 @@ CREATE INDEX idx_issued_certificates_student_name ON issued_certificates(student
 CREATE INDEX idx_issued_certificates_institution ON issued_certificates(institution);
 CREATE INDEX idx_issued_certificates_course_name ON issued_certificates(course_name);
 CREATE INDEX idx_issued_certificates_issue_date ON issued_certificates(issue_date);
+CREATE INDEX idx_issued_certificates_status ON issued_certificates(status);
+CREATE INDEX idx_issued_certificates_roll_no ON issued_certificates(roll_no);
 CREATE UNIQUE INDEX idx_issued_certificates_id_institution ON issued_certificates(certificate_id, institution);
 ```
 

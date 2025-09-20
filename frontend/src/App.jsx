@@ -1,17 +1,20 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { FileText, BarChart3, Users, Menu, X } from 'lucide-react';
+import { FileText, BarChart3, Users, Menu, X, Plus, Shield } from 'lucide-react';
 import Upload from './pages/Upload';
 import Dashboard from './pages/Dashboard';
 import ManualReview from './pages/ManualReview';
+import CertificateIssuance from './pages/CertificateIssuance';
+import PublicVerification from './pages/PublicVerification';
 
 function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
   const navigation = [
-    { name: 'Upload', href: '/', icon: FileText },
+    { name: 'Verify', href: '/', icon: FileText },
     { name: 'Dashboard', href: '/dashboard', icon: BarChart3 },
     { name: 'Reviews', href: '/reviews', icon: Users },
+    { name: 'Issue', href: '/issue', icon: Plus },
   ];
 
   return (
@@ -90,6 +93,8 @@ function App() {
             <Route path="/" element={<Upload />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/reviews" element={<ManualReview />} />
+            <Route path="/issue" element={<CertificateIssuance />} />
+            <Route path="/verify/:attestationId" element={<PublicVerification />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>

@@ -1,4 +1,4 @@
-"""
+  """
 Configuration settings for Supabase credentials and API keys
 """
 import os
