@@ -66,14 +66,14 @@ def generate_key_pair() -> Tuple[str, str]:
         public_key = private_key.public_key()
         
         # Serialize private key
-        private_pem = private_key.private_key_bytes(
+        private_pem = private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption()
         ).decode('utf-8')
         
         # Serialize public key
-        public_pem = public_key.public_key_bytes(
+        public_pem = public_key.public_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         ).decode('utf-8')

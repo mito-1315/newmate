@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle, XCircle, AlertTriangle, Shield, QrCode, Download, ExternalLink, FileText } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, Shield, QrCode, Download, ExternalLink, FileText, Calendar, Award, Building, User, Hash, Clock } from 'lucide-react';
 
 const PublicVerification = () => {
   const { attestationId } = useParams();
@@ -21,7 +21,7 @@ const PublicVerification = () => {
 
     try {
       // Verify certificate
-      const verifyResponse = await fetch(`/api/verify/${id}`);
+      const verifyResponse = await fetch(`/verify/${id}`);
       if (!verifyResponse.ok) {
         throw new Error(`Verification failed: ${verifyResponse.statusText}`);
       }
@@ -31,7 +31,7 @@ const PublicVerification = () => {
       // Get certificate image if verification is successful
       if (verifyData.valid) {
         try {
-          const imageResponse = await fetch(`/api/verify/${id}/image`);
+          const imageResponse = await fetch(`/verify/${id}/image`);
           if (imageResponse.ok) {
             const imageData = await imageResponse.json();
             setCertificateImage(imageData);
@@ -131,47 +131,126 @@ const PublicVerification = () => {
         {/* Certificate Details */}
         {verificationResult?.valid && verificationResult?.certificate_details && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+            <h3 className="text-lg font-medium text-gray-900 mb-6 flex items-center">
               <FileText className="h-5 w-5 mr-2" />
-              Certificate Details
+              Certificate Information
             </h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <h4 className="font-medium text-gray-700 mb-3">Student Information</h4>
-                <div className="space-y-2 text-sm">
-                  <div>
-                    <span className="text-gray-500">Name:</span>
-                    <span className="ml-2 font-medium">{verificationResult.certificate_details.student_name}</span>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Student Information */}
+              <div className="space-y-6">
+                <div>
+                  <h4 className="text-md font-medium text-gray-900 mb-4 flex items-center">
+                    <User className="h-4 w-4 mr-2" />
+                    Student Information
+                  </h4>
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Full Name:</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {verificationResult.certificate_details.student_name || 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Roll Number:</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {verificationResult.certificate_details.roll_no || 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Certificate ID:</span>
+                      <span className="text-sm font-medium text-gray-900 font-mono">
+                        {verificationResult.certificate_details.certificate_id || 'N/A'}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-gray-500">Certificate ID:</span>
-                    <span className="ml-2 font-medium">{verificationResult.certificate_details.certificate_id}</span>
+                </div>
+
+                {/* Course Information */}
+                <div>
+                  <h4 className="text-md font-medium text-gray-900 mb-4 flex items-center">
+                    <Award className="h-4 w-4 mr-2" />
+                    Course Details
+                  </h4>
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Course Name:</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {verificationResult.certificate_details.course_name || 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Year of Passing:</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {verificationResult.certificate_details.year_of_passing || 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Grade/CGPA:</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {verificationResult.certificate_details.grade || 'N/A'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div>
-                <h4 className="font-medium text-gray-700 mb-3">Academic Information</h4>
-                <div className="space-y-2 text-sm">
-                  <div>
-                    <span className="text-gray-500">Course:</span>
-                    <span className="ml-2 font-medium">{verificationResult.certificate_details.course_name}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Institution:</span>
-                    <span className="ml-2 font-medium">{verificationResult.certificate_details.institution}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Issue Date:</span>
-                    <span className="ml-2 font-medium">{verificationResult.certificate_details.issue_date}</span>
-                  </div>
-                  {verificationResult.certificate_details.grade && (
-                    <div>
-                      <span className="text-gray-500">Grade:</span>
-                      <span className="ml-2 font-medium">{verificationResult.certificate_details.grade}</span>
+              {/* Institution & Verification Info */}
+              <div className="space-y-6">
+                <div>
+                  <h4 className="text-md font-medium text-gray-900 mb-4 flex items-center">
+                    <Building className="h-4 w-4 mr-2" />
+                    Institution Details
+                  </h4>
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Institution:</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {verificationResult.certificate_details.institution || 'N/A'}
+                      </span>
                     </div>
-                  )}
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Department:</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {verificationResult.certificate_details.department || 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Issued Date:</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {verificationResult.certificate_details.issue_date || 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Verification Status */}
+                <div>
+                  <h4 className="text-md font-medium text-gray-900 mb-4 flex items-center">
+                    <Shield className="h-4 w-4 mr-2" />
+                    Verification Status
+                  </h4>
+                  <div className="bg-green-50 rounded-lg p-4 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Status:</span>
+                      <span className="text-sm font-medium text-green-800 flex items-center">
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        Verified
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Confidence:</span>
+                      <span className="text-sm font-medium text-green-800">
+                        {Math.round((verificationResult.confidence || 0) * 100)}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Verification Time:</span>
+                      <span className="text-sm font-medium text-green-800">
+                        {new Date().toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

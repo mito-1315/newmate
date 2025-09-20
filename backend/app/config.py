@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     # LLM/AI Configuration
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
     ANTHROPIC_API_KEY: Optional[str] = os.getenv("ANTHROPIC_API_KEY")
+    GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
     DONUT_MODEL_PATH: str = os.getenv("DONUT_MODEL_PATH", "naver-clova-ix/donut-base-finetuned-cord-v2")
     
     # Storage Configuration

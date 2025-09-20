@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Eye, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Search, Filter, Eye, CheckCircle, XCircle, Clock, Building, GraduationCap, ArrowLeft, User, Award, Calendar, Hash, AlertTriangle, FileText } from 'lucide-react';
 
 const ManualReview = () => {
   const [reviews, setReviews] = useState([]);
@@ -12,11 +12,11 @@ const ManualReview = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`/api/reviews?status=${filter}&search=${searchTerm}`);
+        const response = await fetch(`/admin/legacy-queue`);
         const data = await response.json();
-        setReviews(data.reviews || []);
+        setReviews(data.requests || []);
       } catch (error) {
-        console.error('Failed to fetch reviews:', error);
+        console.error('Failed to fetch legacy verification requests:', error);
       } finally {
         setLoading(false);
       }
@@ -25,26 +25,26 @@ const ManualReview = () => {
   }, [filter, searchTerm]);
 
 
-  const handleReviewDecision = async (verificationId, approved, notes, correctedFields = null) => {
+  const handleReviewDecision = async (requestId, approved, notes, correctedFields = null) => {
     try {
-      const response = await fetch('/api/reviews/decision', {
+      const endpoint = approved ? '/admin/legacy/approve' : '/admin/legacy/reject';
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          verification_id: verificationId,
-          approved,
-          reviewer_notes: notes,
-          corrected_fields: correctedFields,
+          request_id: requestId,
+          admin_notes: notes,
+          rejection_reason: approved ? null : notes
         }),
       });
 
       if (response.ok) {
         // Refresh the list
-        const refreshResponse = await fetch(`/api/reviews?status=${filter}&search=${searchTerm}`);
+        const refreshResponse = await fetch('/admin/legacy-queue');
         const refreshData = await refreshResponse.json();
-        setReviews(refreshData.reviews || []);
+        setReviews(refreshData.requests || []);
         setSelectedReview(null);
       } else {
         throw new Error('Failed to submit review decision');
@@ -79,17 +79,41 @@ const ManualReview = () => {
   };
 
   const filteredReviews = reviews.filter(review =>
-    review.verification_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    review.extracted_fields.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    review.extracted_fields.institution?.toLowerCase().includes(searchTerm.toLowerCase())
+    (review.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (review.student_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (review.course_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (review.roll_no || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex items-center">
+              <button
+                onClick={() => window.history.back()}
+                className="mr-4 p-2 text-gray-400 hover:text-gray-600"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <Building className="h-8 w-8 text-blue-600" />
+              <span className="ml-2 text-xl font-bold text-gray-900">
+                Legacy Verification Queue
+              </span>
+            </div>
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-500">University Admin</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Manual Review Queue</h1>
-          <p className="text-gray-600">Review certificates that require manual verification</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Legacy Certificate Verification</h1>
+          <p className="text-gray-600">Review and verify legacy certificate requests from students</p>
         </div>
 
         {/* Filters and Search */}
@@ -103,8 +127,8 @@ const ManualReview = () => {
                   onChange={(e) => setFilter(e.target.value)}
                   className="border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="pending">Pending Reviews</option>
-                  <option value="all">All Reviews</option>
+                  <option value="pending">Pending Verification</option>
+                  <option value="all">All Requests</option>
                   <option value="approved">Approved</option>
                   <option value="rejected">Rejected</option>
                 </select>
@@ -140,9 +164,9 @@ const ManualReview = () => {
               ) : (
                 filteredReviews.map((review) => (
                   <div
-                    key={review.verification_id}
+                    key={review.id}
                     className={`bg-white rounded-lg shadow-md p-6 cursor-pointer transition-all ${
-                      selectedReview?.verification_id === review.verification_id
+                      selectedReview?.id === review.id
                         ? 'ring-2 ring-blue-500'
                         : 'hover:shadow-lg'
                     }`}
@@ -152,38 +176,47 @@ const ManualReview = () => {
                       <div className="flex items-center space-x-2">
                         {getStatusIcon(review.status)}
                         <span className="font-medium text-gray-900">
-                          {review.verification_id.substring(0, 12)}...
+                          {review.id}
                         </span>
                       </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRiskLevelColor(review.risk_score.risk_level)}`}>
-                        {review.risk_score.risk_level.toUpperCase()}
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        review.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        review.status === 'approved' ? 'bg-green-100 text-green-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {review.status.toUpperCase()}
                       </span>
                     </div>
 
                     <div className="space-y-2 text-sm">
-                      <div>
+                      <div className="flex items-center">
+                        <User className="h-4 w-4 mr-2 text-gray-400" />
                         <span className="text-gray-500">Name: </span>
-                        <span className="font-medium">{review.extracted_fields.name || 'N/A'}</span>
+                        <span className="font-medium ml-1">{review.student_name || 'N/A'}</span>
                       </div>
-                      <div>
-                        <span className="text-gray-500">Institution: </span>
-                        <span className="font-medium">{review.extracted_fields.institution || 'N/A'}</span>
+                      <div className="flex items-center">
+                        <Hash className="h-4 w-4 mr-2 text-gray-400" />
+                        <span className="text-gray-500">Roll No: </span>
+                        <span className="font-medium ml-1">{review.roll_no || 'N/A'}</span>
                       </div>
-                      <div>
+                      <div className="flex items-center">
+                        <GraduationCap className="h-4 w-4 mr-2 text-gray-400" />
                         <span className="text-gray-500">Course: </span>
-                        <span className="font-medium">{review.extracted_fields.course_name || 'N/A'}</span>
+                        <span className="font-medium ml-1">{review.course_name || 'N/A'}</span>
+                      </div>
+                      <div className="flex items-center">
+                        <Calendar className="h-4 w-4 mr-2 text-gray-400" />
+                        <span className="text-gray-500">Year: </span>
+                        <span className="font-medium ml-1">{review.year_of_passing || 'N/A'}</span>
                       </div>
                     </div>
 
-                    {review.risk_score.factors.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-gray-200">
-                        <p className="text-xs text-gray-500 mb-1">Risk Factors:</p>
-                        <p className="text-xs text-red-600">
-                          {review.risk_score.factors.slice(0, 2).join(', ')}
-                          {review.risk_score.factors.length > 2 && '...'}
-                        </p>
-                      </div>
-                    )}
+                    <div className="mt-3 pt-3 border-t border-gray-200">
+                      <p className="text-xs text-gray-500 mb-1">Submitted:</p>
+                      <p className="text-xs text-gray-700">
+                        {new Date(review.submitted_at).toLocaleDateString()}
+                      </p>
+                    </div>
                   </div>
                 ))
               )}
@@ -212,7 +245,12 @@ const ManualReview = () => {
 
 const ReviewDetailPanel = ({ review, onDecision }) => {
   const [notes, setNotes] = useState('');
-  const [editedFields, setEditedFields] = useState(review.extracted_fields);
+  const [editedFields, setEditedFields] = useState({
+    student_name: review.student_name,
+    roll_no: review.roll_no,
+    course_name: review.course_name,
+    year_of_passing: review.year_of_passing
+  });
   const [isEditing, setIsEditing] = useState(false);
 
   const handleApprove = () => {
@@ -220,15 +258,15 @@ const ReviewDetailPanel = ({ review, onDecision }) => {
       alert('Please add review notes');
       return;
     }
-    onDecision(review.verification_id, true, notes, isEditing ? editedFields : null);
+    onDecision(review.id, true, notes, isEditing ? editedFields : null);
   };
 
   const handleReject = () => {
     if (!notes.trim()) {
-      alert('Please add review notes');
+      alert('Please add rejection reason');
       return;
     }
-    onDecision(review.verification_id, false, notes);
+    onDecision(review.id, false, notes);
   };
 
   const handleFieldChange = (field, value) => {
@@ -240,96 +278,77 @@ const ReviewDetailPanel = ({ review, onDecision }) => {
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
-      <h3 className="text-lg font-medium text-gray-900 mb-4">Review Details</h3>
+      <h3 className="text-lg font-medium text-gray-900 mb-4">Legacy Verification Details</h3>
 
       {/* Certificate Image */}
       {review.image_url && (
         <div className="mb-6">
+          <h4 className="text-md font-medium text-gray-900 mb-2">Uploaded Certificate</h4>
           <img
             src={review.image_url}
-            alt="Certificate"
+            alt="Legacy Certificate"
             className="w-full rounded-lg border border-gray-200"
           />
         </div>
       )}
 
-      {/* Risk Assessment */}
+      {/* Student Information */}
       <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-        <h4 className="font-medium text-gray-900 mb-2">Risk Assessment</h4>
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="text-gray-500">Overall Score: </span>
-            <span className="font-medium">{Math.round(review.risk_score.overall_score * 100)}%</span>
+        <h4 className="font-medium text-gray-900 mb-3">Student Information</h4>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-gray-500">Name:</span>
+            <span className="font-medium">{review.student_name}</span>
           </div>
-          <div>
-            <span className="text-gray-500">Confidence: </span>
-            <span className="font-medium">{Math.round(review.risk_score.confidence * 100)}%</span>
+          <div className="flex justify-between">
+            <span className="text-gray-500">Roll No:</span>
+            <span className="font-medium">{review.roll_no}</span>
           </div>
-        </div>
-        {review.risk_score.factors.length > 0 && (
-          <div className="mt-3">
-            <p className="text-sm text-gray-500 mb-1">Risk Factors:</p>
-            <ul className="text-sm text-gray-600 space-y-1">
-              {review.risk_score.factors.map((factor, index) => (
-                <li key={index} className="flex items-center space-x-2">
-                  <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
-                  <span>{factor}</span>
-                </li>
-              ))}
-            </ul>
+          <div className="flex justify-between">
+            <span className="text-gray-500">Course:</span>
+            <span className="font-medium">{review.course_name}</span>
           </div>
-        )}
-      </div>
-
-      {/* Extracted Fields */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="font-medium text-gray-900">Extracted Fields</h4>
-          <button
-            onClick={() => setIsEditing(!isEditing)}
-            className="text-sm text-blue-600 hover:text-blue-700"
-          >
-            {isEditing ? 'Cancel Edit' : 'Edit Fields'}
-          </button>
-        </div>
-
-        <div className="space-y-3">
-          {Object.entries(review.extracted_fields).map(([key, value]) => {
-            if (key === 'additional_fields') return null;
-            return (
-              <div key={key}>
-                <label className="block text-sm text-gray-500 mb-1 capitalize">
-                  {key.replace('_', ' ')}
-                </label>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={editedFields[key] || ''}
-                    onChange={(e) => handleFieldChange(key, e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                ) : (
-                  <p className="font-medium text-sm">{value || 'N/A'}</p>
-                )}
-              </div>
-            );
-          })}
+          <div className="flex justify-between">
+            <span className="text-gray-500">Year:</span>
+            <span className="font-medium">{review.year_of_passing}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-500">Email:</span>
+            <span className="font-medium">{review.email}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-500">Phone:</span>
+            <span className="font-medium">{review.phone || 'N/A'}</span>
+          </div>
         </div>
       </div>
 
-      {/* Review Notes */}
+      {/* Verification Instructions */}
+      <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+        <h4 className="font-medium text-blue-900 mb-2">Verification Instructions</h4>
+        <ul className="text-sm text-blue-800 space-y-1">
+          <li>• Cross-check student details with university archives</li>
+          <li>• Verify certificate authenticity and format</li>
+          <li>• Check for any discrepancies in information</li>
+          <li>• If valid: Approve and generate QR code</li>
+          <li>• If invalid: Reject with clear reason</li>
+        </ul>
+      </div>
+
+      {/* Admin Notes */}
       <div className="mb-6">
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Review Notes *
+          Admin Notes *
         </label>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={4}
           className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          placeholder="Add your review comments..."
+          placeholder="Add your verification notes..."
         />
       </div>
+
 
       {/* Action Buttons */}
       <div className="flex space-x-3">
@@ -338,7 +357,7 @@ const ReviewDetailPanel = ({ review, onDecision }) => {
           className="flex-1 bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition-colors flex items-center justify-center space-x-2"
         >
           <CheckCircle className="h-4 w-4" />
-          <span>Approve</span>
+          <span>Approve & Generate QR</span>
         </button>
         <button
           onClick={handleReject}

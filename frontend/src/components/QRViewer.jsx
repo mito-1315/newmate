@@ -18,7 +18,7 @@ const QRViewer = ({ verificationId, attestationId, onClose }) => {
   const fetchAttestation = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/attestations/${attestationId}`);
+      const response = await fetch(`/attestations/${attestationId}`);
       if (!response.ok) {
         throw new Error('Attestation not found');
       }
@@ -39,7 +39,7 @@ const QRViewer = ({ verificationId, attestationId, onClose }) => {
   const fetchVerification = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/verifications/${verificationId}`);
+      const response = await fetch(`/verifications/${verificationId}`);
       if (!response.ok) {
         throw new Error('Verification not found');
       }
@@ -59,7 +59,7 @@ const QRViewer = ({ verificationId, attestationId, onClose }) => {
 
   const fetchVerificationDetails = async (verId) => {
     try {
-      const response = await fetch(`/api/verifications/${verId}`);
+      const response = await fetch(`/verifications/${verId}`);
       if (response.ok) {
         const data = await response.json();
         setVerificationResult(data);
@@ -73,7 +73,7 @@ const QRViewer = ({ verificationId, attestationId, onClose }) => {
     if (!attestation) return;
 
     try {
-      const response = await fetch('/api/verify-signature', {
+      const response = await fetch('/verify-signature', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

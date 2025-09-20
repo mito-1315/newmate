@@ -11,10 +11,10 @@ import {
 const Dashboard = () => {
   const [stats, setStats] = useState({
     total_verifications: 0,
-    verified_certificates: 0,
+    successful_verifications: 0,
     failed_verifications: 0,
-    pending_reviews: 0,
-    tampered_certificates: 0,
+    verification_rate: 0.0,
+    period: "30_days",
     risk_distribution: [],
     daily_verifications: [],
     institution_stats: [],
@@ -30,10 +30,15 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch('/api/analytics/verification-stats');
+        const response = await fetch('/analytics/verification-stats');
         if (response.ok) {
           const data = await response.json();
-          setStats(data);
+          setStats(prevStats => ({
+            ...prevStats,
+            ...data
+          }));
+        } else {
+          console.error('Failed to fetch stats:', response.statusText);
         }
       } catch (err) {
         console.error('Error fetching stats:', err);
@@ -49,28 +54,28 @@ const Dashboard = () => {
   const statCards = [
     {
       title: 'Total Verifications',
-      value: stats.total_verifications,
+      value: stats.total_verifications || 0,
       icon: FileText,
       color: 'bg-blue-500',
       change: '+12%'
     },
     {
-      title: 'Verified Certificates',
-      value: stats.verified_certificates,
+      title: 'Successful Verifications',
+      value: stats.successful_verifications || 0,
       icon: CheckCircle,
       color: 'bg-green-500',
       change: '+8%'
     },
     {
-      title: 'Tampered Detected',
-      value: stats.tampered_certificates,
+      title: 'Failed Verifications',
+      value: stats.failed_verifications || 0,
       icon: Shield,
       color: 'bg-red-500',
       change: '-15%'
     },
     {
-      title: 'Pending Reviews',
-      value: stats.pending_reviews,
+      title: 'Verification Rate',
+      value: Math.round((stats.verification_rate || 0) * 100),
       icon: Clock,
       color: 'bg-yellow-500',
       change: '+5%'
@@ -120,7 +125,7 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-500 mb-1">{stat.title}</p>
-                    <p className="text-2xl font-bold text-gray-900">{stat.value.toLocaleString()}</p>
+                    <p className="text-2xl font-bold text-gray-900">{(stat.value || 0).toLocaleString()}</p>
                     <div className="flex items-center mt-2">
                       <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
                       <span className="text-sm text-green-600">{stat.change}</span>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login Test</title>
+</head>
+<body>
+    <h1>Login Test</h1>
+    <form id="loginForm">
+        <div>
+            <label>Email:</label>
+            <input type="email" id="email" value="admin@test.com">
+        </div>
+        <div>
+            <label>Password:</label>
+            <input type="password" id="password" value="password123">
+        </div>
+        <div>
+            <label>Role:</label>
+            <select id="role">
+                <option value="student">Student</option>
+                <option value="university_admin">University Admin</option>
+                <option value="employer">Employer/Verifier</option>
+            </select>
+        </div>
+        <button type="submit">Login</button>
+    </form>
+    
+    <div id="result"></div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const role = document.getElementById('role').value;
+            
+            const userData = {
+                id: '1',
+                full_name: email.split('@')[0],
+                email: email,
+                role: role,
+                institution: 'Test Institution'
+            };
+            
+            console.log('User data:', userData);
+            
+            // Store in localStorage
+            localStorage.setItem('user', JSON.stringify(userData));
+            
+            // Show result
+            document.getElementById('result').innerHTML = `
+                <h3>Login Successful!</h3>
+                <p>User: ${userData.full_name}</p>
+                <p>Email: ${userData.email}</p>
+                <p>Role: ${userData.role}</p>
+                <p>Institution: ${userData.institution}</p>
+                <p>Stored in localStorage: ${localStorage.getItem('user')}</p>
+            `;
+        });
+    </script>
+</body>
+</html>
