@@ -23,6 +23,28 @@ const Login = ({ onAuthSuccess }) => {
     }));
   };
 
+  // Predefined users for testing
+  const predefinedUsers = {
+    'admin@test.com': {
+      password: 'admin123',
+      role: 'university_admin',
+      full_name: 'University Admin',
+      institution: 'Test University'
+    },
+    'student@test.com': {
+      password: 'student123',
+      role: 'student',
+      full_name: 'Test Student',
+      institution: 'Test University'
+    },
+    'employer@test.com': {
+      password: 'employer123',
+      role: 'employer',
+      full_name: 'Test Employer',
+      institution: 'Test Company'
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -33,7 +55,7 @@ const Login = ({ onAuthSuccess }) => {
 
     try {
       if (isLogin) {
-        // Simple login validation
+        // Validate required fields
         if (!formData.email || !formData.password) {
           throw new Error('Email and password are required');
         }
@@ -42,13 +64,29 @@ const Login = ({ onAuthSuccess }) => {
           throw new Error('Please select a role');
         }
         
-        // Mock authentication - in real app, call your API
+        // Check if user exists in predefined users
+        const user = predefinedUsers[formData.email];
+        if (!user) {
+          throw new Error('Invalid email address');
+        }
+        
+        // Check password
+        if (user.password !== formData.password) {
+          throw new Error('Invalid password');
+        }
+        
+        // Check if selected role matches user's role
+        if (user.role !== formData.role) {
+          throw new Error(`This email is registered as ${user.role.replace('_', ' ')}. Please select the correct role.`);
+        }
+        
+        // Create user data
         const userData = {
-          id: '1',
-          full_name: formData.email.split('@')[0],
+          id: user.role === 'university_admin' ? '1' : user.role === 'student' ? '2' : '3',
+          full_name: user.full_name,
           email: formData.email,
-          role: formData.role,
-          institution: formData.institution || 'Default Institution'
+          role: user.role,
+          institution: user.institution
         };
         
         console.log('Creating user data:', userData);
@@ -241,6 +279,16 @@ const Login = ({ onAuthSuccess }) => {
                 {error}
               </div>
             )}
+
+            {/* Test Credentials */}
+            <div className="bg-blue-50 border border-blue-200 p-3 rounded text-xs">
+              <strong>Test Credentials:</strong><br/>
+              <div className="mt-1 space-y-1">
+                <div><strong>University Admin:</strong> admin@test.com / admin123</div>
+                <div><strong>Student:</strong> student@test.com / student123</div>
+                <div><strong>Employer:</strong> employer@test.com / employer123</div>
+              </div>
+            </div>
 
             {/* Debug section */}
             <div className="bg-gray-100 p-3 rounded text-xs">
