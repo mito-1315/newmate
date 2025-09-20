@@ -1,137 +1,125 @@
 """
-Utility functions for logging, hashing, image handling, and cryptography
+Utility functions for certificate verification system
 """
-import logging
 import hashlib
-import imagehash
-from PIL import Image
-import io
+import logging
 import qrcode
 import base64
-from typing import Tuple, Optional
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
-import secrets
-import json
+import io
 from datetime import datetime
+from typing import Dict, Any, Optional, Tuple
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature, decode_dss_signature
+from cryptography.exceptions import InvalidSignature
+import json
 
-def setup_logging(level: str = "INFO") -> logging.Logger:
-    """Setup application logging"""
+def setup_logging(log_level: str = "INFO") -> logging.Logger:
+    """Setup logging configuration"""
     logging.basicConfig(
-        level=getattr(logging, level.upper()),
+        level=getattr(logging, log_level.upper()),
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
             logging.StreamHandler(),
-            logging.FileHandler('certificate_verifier.log')
+            logging.FileHandler('logs/app.log', mode='a')
         ]
     )
-    
-    # Set specific loggers
-    logging.getLogger("uvicorn").setLevel(logging.WARNING)
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    
     return logging.getLogger(__name__)
-
-async def process_image(file) -> bytes:
-    """Process uploaded image file"""
-    try:
-        # Read file contents
-        contents = await file.read()
-        
-        # Validate image
-        image = Image.open(io.BytesIO(contents))
-        
-        # Convert to RGB if necessary
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
-        
-        # Resize if too large (max 2048x2048)
-        max_size = (2048, 2048)
-        if image.size[0] > max_size[0] or image.size[1] > max_size[1]:
-            image.thumbnail(max_size, Image.Resampling.LANCZOS)
-        
-        # Save processed image to bytes
-        output = io.BytesIO()
-        image.save(output, format='JPEG', quality=90, optimize=True)
-        
-        return output.getvalue()
-        
-    except Exception as e:
-        raise ValueError(f"Invalid image file: {str(e)}")
 
 def generate_image_hash(image_data: bytes) -> str:
     """Generate SHA256 hash of image data"""
     return hashlib.sha256(image_data).hexdigest()
 
-def generate_perceptual_hash(image_data: bytes) -> str:
-    """Generate perceptual hash for duplicate detection"""
-    try:
-        image = Image.open(io.BytesIO(image_data))
-        phash = imagehash.phash(image)
-        return str(phash)
-    except Exception as e:
-        logging.error(f"Error generating perceptual hash: {str(e)}")
-        return ""
+def generate_secure_token(length: int = 32) -> str:
+    """Generate secure random token"""
+    import secrets
+    return secrets.token_urlsafe(length)
+
+def create_qr_code(data: str, size: int = 10) -> str:
+    """Create QR code image and return as base64 data URL"""
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=size,
+        border=4,
+    )
+    qr.add_data(data)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    # Convert to base64
+    img_buffer = io.BytesIO()
+    img.save(img_buffer, format='PNG')
+    img_data = img_buffer.getvalue()
+    img_base64 = base64.b64encode(img_data).decode('utf-8')
+    
+    return f"data:image/png;base64,{img_base64}"
 
 def generate_key_pair() -> Tuple[str, str]:
     """Generate ECDSA key pair for signing"""
-    private_key = ec.generate_private_key(ec.SECP256R1())
-    
-    # Serialize private key
-    private_pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption()
-    )
-    
-    # Serialize public key
-    public_key = private_key.public_key()
-    public_pem = public_key.public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
-    )
-    
-    return private_pem.decode(), public_pem.decode()
-
-def sign_data(data: str, private_key_pem: Optional[str] = None) -> Tuple[str, str]:
-    """Sign data with ECDSA private key"""
-    if not private_key_pem:
-        # Generate new key pair for dev/testing
-        private_key_pem, public_key_pem = generate_key_pair()
-    else:
-        # Load existing private key
-        private_key = serialization.load_pem_private_key(
-            private_key_pem.encode(),
-            password=None
-        )
-        public_key_pem = private_key.public_key().public_bytes(
+    try:
+        # Generate private key
+        private_key = ec.generate_private_key(ec.SECP256R1())
+        
+        # Get public key
+        public_key = private_key.public_key()
+        
+        # Serialize private key
+        private_pem = private_key.private_key_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        ).decode('utf-8')
+        
+        # Serialize public key
+        public_pem = public_key.public_key_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
-        ).decode()
-    
-    # Load private key
-    private_key = serialization.load_pem_private_key(
-        private_key_pem.encode(),
-        password=None
-    )
-    
-    # Sign the data
-    signature = private_key.sign(
-        data.encode(),
-        ec.ECDSA(hashes.SHA256())
-    )
-    
-    # Encode signature as base64
-    signature_b64 = base64.b64encode(signature).decode()
-    
-    return signature_b64, public_key_pem
+        ).decode('utf-8')
+        
+        return private_pem, public_pem
+        
+    except Exception as e:
+        raise Exception(f"Key generation failed: {str(e)}")
+
+def sign_data(data: str, private_key_pem: str) -> Tuple[str, str]:
+    """Sign data with private key and return signature + public key"""
+    try:
+        # Load private key
+        private_key = serialization.load_pem_private_key(
+            private_key_pem.encode('utf-8'),
+            password=None
+        )
+        
+        # Sign data
+        signature = private_key.sign(
+            data.encode('utf-8'),
+            ec.ECDSA(hashes.SHA256())
+        )
+        
+        # Encode signature as base64
+        signature_b64 = base64.b64encode(signature).decode('utf-8')
+        
+        # Get public key
+        public_key = private_key.public_key()
+        public_key_pem = public_key.public_key_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        ).decode('utf-8')
+        
+        return signature_b64, public_key_pem
+        
+    except Exception as e:
+        raise Exception(f"Signing failed: {str(e)}")
 
 def verify_signature(data: str, signature_b64: str, public_key_pem: str) -> bool:
-    """Verify ECDSA signature"""
+    """Verify signature with public key"""
     try:
         # Load public key
-        public_key = serialization.load_pem_public_key(public_key_pem.encode())
+        public_key = serialization.load_pem_public_key(
+            public_key_pem.encode('utf-8')
+        )
         
         # Decode signature
         signature = base64.b64decode(signature_b64)
@@ -139,149 +127,160 @@ def verify_signature(data: str, signature_b64: str, public_key_pem: str) -> bool
         # Verify signature
         public_key.verify(
             signature,
-            data.encode(),
+            data.encode('utf-8'),
             ec.ECDSA(hashes.SHA256())
         )
+        
         return True
         
+    except InvalidSignature:
+        return False
     except Exception as e:
-        logging.error(f"Signature verification failed: {str(e)}")
+        logging.error(f"Signature verification error: {str(e)}")
         return False
 
-async def create_qr_code(verification_id: str, signature: str) -> str:
-    """Create QR code for certificate verification"""
+def process_image(image_data: bytes) -> Dict[str, Any]:
+    """Process uploaded image and extract metadata"""
     try:
-        # QR code data
-        qr_data = {
-            "verification_id": verification_id,
-            "signature": signature,
-            "verify_url": f"https://your-domain.com/verify/{verification_id}",
-            "timestamp": datetime.utcnow().isoformat()
+        from PIL import Image
+        
+        # Open image
+        img = Image.open(io.BytesIO(image_data))
+        
+        # Get basic metadata
+        metadata = {
+            "format": img.format,
+            "mode": img.mode,
+            "size": img.size,
+            "has_transparency": img.mode in ("RGBA", "LA") or "transparency" in img.info,
+            "file_size": len(image_data)
         }
         
-        # Generate QR code
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_L,
-            box_size=10,
-            border=4,
-        )
-        qr.add_data(json.dumps(qr_data))
-        qr.make(fit=True)
+        # Get EXIF data if available
+        if hasattr(img, '_getexif') and img._getexif():
+            metadata["exif"] = dict(img._getexif())
         
-        # Create QR code image
-        qr_image = qr.make_image(fill_color="black", back_color="white")
-        
-        # Convert to bytes
-        img_buffer = io.BytesIO()
-        qr_image.save(img_buffer, format='PNG')
-        img_data = img_buffer.getvalue()
-        
-        # For now, return base64 encoded image
-        # In production, you'd upload to storage and return URL
-        return f"data:image/png;base64,{base64.b64encode(img_data).decode()}"
+        return metadata
         
     except Exception as e:
-        logging.error(f"Error creating QR code: {str(e)}")
-        return ""
+        logging.error(f"Image processing error: {str(e)}")
+        return {"error": str(e)}
 
-def validate_certificate_fields(fields: dict) -> list:
-    """Validate certificate field formats"""
-    errors = []
+def normalize_text(text: str) -> str:
+    """Normalize text for better matching"""
+    import re
     
-    # Name validation
-    if 'name' in fields and fields['name']:
-        if len(fields['name']) < 2:
-            errors.append("Name too short")
-        if not fields['name'].replace(' ', '').replace('-', '').isalpha():
-            errors.append("Name contains invalid characters")
+    # Convert to lowercase
+    text = text.lower()
     
-    # Date validation
-    if 'issue_date' in fields and fields['issue_date']:
-        try:
-            # Try common date formats
-            for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']:
-                try:
-                    datetime.strptime(fields['issue_date'], fmt)
-                    break
-                except ValueError:
-                    continue
-            else:
-                errors.append("Invalid date format")
-        except Exception:
-            errors.append("Invalid date")
+    # Remove extra whitespace
+    text = re.sub(r'\s+', ' ', text)
     
-    # Certificate ID validation
-    if 'certificate_id' in fields and fields['certificate_id']:
-        if len(fields['certificate_id']) < 3:
-            errors.append("Certificate ID too short")
+    # Remove special characters except alphanumeric and spaces
+    text = re.sub(r'[^a-z0-9\s]', '', text)
     
-    return errors
+    return text.strip()
+
+def calculate_similarity(text1: str, text2: str) -> float:
+    """Calculate text similarity using simple Levenshtein distance"""
+    def levenshtein_distance(s1, s2):
+        if len(s1) < len(s2):
+            return levenshtein_distance(s2, s1)
+        
+        if len(s2) == 0:
+            return len(s1)
+        
+        previous_row = list(range(len(s2) + 1))
+        for i, c1 in enumerate(s1):
+            current_row = [i + 1]
+            for j, c2 in enumerate(s2):
+                insertions = previous_row[j + 1] + 1
+                deletions = current_row[j] + 1
+                substitutions = previous_row[j] + (c1 != c2)
+                current_row.append(min(insertions, deletions, substitutions))
+            previous_row = current_row
+        
+        return previous_row[-1]
+    
+    # Normalize texts
+    norm_text1 = normalize_text(text1)
+    norm_text2 = normalize_text(text2)
+    
+    if not norm_text1 or not norm_text2:
+        return 0.0
+    
+    # Calculate distance
+    distance = levenshtein_distance(norm_text1, norm_text2)
+    max_len = max(len(norm_text1), len(norm_text2))
+    
+    # Convert to similarity (0-1)
+    similarity = 1 - (distance / max_len)
+    return max(0.0, similarity)
+
+def format_file_size(size_bytes: int) -> str:
+    """Format file size in human readable format"""
+    if size_bytes == 0:
+        return "0B"
+    
+    size_names = ["B", "KB", "MB", "GB"]
+    import math
+    i = int(math.floor(math.log(size_bytes, 1024)))
+    p = math.pow(1024, i)
+    s = round(size_bytes / p, 2)
+    
+    return f"{s} {size_names[i]}"
+
+def validate_file_type(filename: str, allowed_extensions: set) -> bool:
+    """Validate file type based on extension"""
+    if not filename:
+        return False
+    
+    extension = filename.lower().split('.')[-1] if '.' in filename else ''
+    return extension in allowed_extensions
 
 def sanitize_filename(filename: str) -> str:
-    """Sanitize filename for storage"""
+    """Sanitize filename for safe storage"""
     import re
-    # Remove or replace invalid characters
-    sanitized = re.sub(r'[<>:"/\\|?*]', '_', filename)
+    
+    # Remove path components
+    filename = filename.split('/')[-1].split('\\')[-1]
+    
+    # Remove dangerous characters
+    filename = re.sub(r'[^\w\-_\.]', '_', filename)
+    
     # Limit length
-    sanitized = sanitized[:100]
-    return sanitized
-
-def calculate_file_hash(file_path: str) -> str:
-    """Calculate SHA256 hash of file"""
-    hash_sha256 = hashlib.sha256()
-    with open(file_path, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            hash_sha256.update(chunk)
-    return hash_sha256.hexdigest()
-
-def generate_secure_token(length: int = 32) -> str:
-    """Generate cryptographically secure token"""
-    return secrets.token_urlsafe(length)
-
-class ImageProcessor:
-    """Image processing utilities"""
+    if len(filename) > 255:
+        name, ext = filename.rsplit('.', 1) if '.' in filename else (filename, '')
+        filename = name[:250] + ('.' + ext if ext else '')
     
-    @staticmethod
-    def enhance_for_ocr(image: Image.Image) -> Image.Image:
-        """Enhance image for better OCR results"""
-        # Convert to grayscale
-        if image.mode != 'L':
-            image = image.convert('L')
-        
-        # Enhance contrast
-        from PIL import ImageEnhance
-        enhancer = ImageEnhance.Contrast(image)
-        image = enhancer.enhance(1.5)
-        
-        # Sharpen
-        enhancer = ImageEnhance.Sharpness(image)
-        image = enhancer.enhance(1.2)
-        
-        return image
+    return filename
+
+def create_audit_log_entry(action: str, user_id: Optional[str] = None, 
+                          resource_type: Optional[str] = None,
+                          resource_id: Optional[str] = None,
+                          details: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Create audit log entry"""
+    return {
+        "action": action,
+        "user_id": user_id,
+        "resource_type": resource_type,
+        "resource_id": resource_id,
+        "details": details or {},
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+def mask_sensitive_data(data: Dict[str, Any], sensitive_keys: set = None) -> Dict[str, Any]:
+    """Mask sensitive data in dictionary"""
+    if sensitive_keys is None:
+        sensitive_keys = {"password", "secret", "key", "token", "signature"}
     
-    @staticmethod
-    def detect_text_regions(image_data: bytes) -> list:
-        """Detect text regions in image (placeholder)"""
-        # This would use libraries like OpenCV or specialized text detection models
-        # For now, return empty list
-        return []
+    masked_data = {}
+    for key, value in data.items():
+        if any(sensitive_key in key.lower() for sensitive_key in sensitive_keys):
+            masked_data[key] = "*" * min(len(str(value)), 8) if value else None
+        elif isinstance(value, dict):
+            masked_data[key] = mask_sensitive_data(value, sensitive_keys)
+        else:
+            masked_data[key] = value
     
-    @staticmethod
-    def preprocess_for_donut(image: Image.Image) -> Image.Image:
-        """Preprocess image specifically for Donut model"""
-        # Donut typically expects specific input sizes
-        target_size = (1280, 960)  # Common Donut input size
-        
-        # Resize while maintaining aspect ratio
-        image.thumbnail(target_size, Image.Resampling.LANCZOS)
-        
-        # Create new image with white background
-        new_image = Image.new('RGB', target_size, (255, 255, 255))
-        
-        # Paste resized image centered
-        x = (target_size[0] - image.size[0]) // 2
-        y = (target_size[1] - image.size[1]) // 2
-        new_image.paste(image, (x, y))
-        
-        return new_image
+    return masked_data

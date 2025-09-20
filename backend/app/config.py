@@ -1,4 +1,4 @@
-  """
+"""
 Configuration settings for Supabase credentials and API keys
 """
 import os
@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"  # Ignore extra environment variables
 
 # Global settings instance
 settings = Settings()

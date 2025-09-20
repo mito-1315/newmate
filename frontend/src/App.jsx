@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { FileText, BarChart3, Users, Menu, X, Plus, Shield } from 'lucide-react';
+import { FileText, BarChart3, Users, Menu, X, Plus } from 'lucide-react';
 import Upload from './pages/Upload';
 import Dashboard from './pages/Dashboard';
 import ManualReview from './pages/ManualReview';

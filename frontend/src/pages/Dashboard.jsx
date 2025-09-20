@@ -4,8 +4,8 @@ import {
   PieChart, Pie, Cell, LineChart, Line, ScatterChart, Scatter
 } from 'recharts';
 import { 
-  FileText, CheckCircle, XCircle, Clock, AlertTriangle, 
-  TrendingUp, Users, Award, Shield, Eye, Layers, Search
+  FileText, CheckCircle, XCircle, Clock,
+  TrendingUp, Users, Award, Shield, Eye, Layers
 } from 'lucide-react';
 
 const Dashboard = () => {
@@ -28,28 +28,23 @@ const Dashboard = () => {
   const [showLayerDetails, setShowLayerDetails] = useState(false);
 
   useEffect(() => {
-    fetchDashboardStats();
+    const fetchData = async () => {
+      try {
+        const response = await fetch('/api/analytics/verification-stats');
+        if (response.ok) {
+          const data = await response.json();
+          setStats(data);
+        }
+      } catch (err) {
+        console.error('Error fetching stats:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, [timeRange]);
 
-  const fetchDashboardStats = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/dashboard/stats?range=${timeRange}`);
-      const data = await response.json();
-      setStats(data);
-    } catch (error) {
-      console.error('Failed to fetch dashboard stats:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const COLORS = {
-    low: '#10b981',
-    medium: '#f59e0b', 
-    high: '#f97316',
-    critical: '#ef4444'
-  };
 
   const statCards = [
     {

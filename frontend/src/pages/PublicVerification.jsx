@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle, XCircle, AlertTriangle, Shield, QrCode, Download, ExternalLink } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, Shield, QrCode, Download, ExternalLink, FileText } from 'lucide-react';
 
 const PublicVerification = () => {
   const { attestationId } = useParams();
@@ -182,7 +182,7 @@ const PublicVerification = () => {
         {certificateImage && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
             <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-              <img className="h-5 w-5 mr-2" />
+              <QrCode className="h-5 w-5 mr-2" />
               Certificate Image
             </h3>
             

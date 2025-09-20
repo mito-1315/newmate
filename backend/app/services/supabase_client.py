@@ -101,14 +101,13 @@ class SupabaseClient:
             logger.error(f"Error storing attestation: {str(e)}")
             raise
     
-    async def get_attestation(self, attestation_id: str) -> Optional[AttestationData]:
+    async def get_attestation(self, attestation_id: str) -> Optional[Dict[str, Any]]:
         """Retrieve attestation by ID"""
         try:
             result = self.client.table("attestations").select("*").eq("id", attestation_id).execute()
             
             if result.data:
-                data = result.data[0]
-                return AttestationData(**data)
+                return result.data[0]
             return None
             
         except Exception as e:

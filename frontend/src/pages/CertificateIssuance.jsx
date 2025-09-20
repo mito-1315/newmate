@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, Plus, FileText, Download, QrCode, AlertCircle, CheckCircle } from 'lucide-react';
+import { Upload, FileText, Download, QrCode, AlertCircle, CheckCircle } from 'lucide-react';
 
 const CertificateIssuance = () => {
   const [activeTab, setActiveTab] = useState('single');

@@ -55,78 +55,61 @@ An AI-powered certificate verification system that combines document understandi
 - Docker & Docker Compose
 - Supabase account (free tier available)
 
-## 🚀 Quick Start
+## 🚀 **Quick Start (5 Minutes)**
 
-### 1. Clone the Repository
-
+### 🎯 **Automated Setup (Recommended)**
 ```bash
+# 1. Clone the repository
 git clone https://github.com/your-username/certificate-verifier.git
 cd certificate-verifier
+
+# 2. Create environment files automatically
+python scripts/create_env_template.py
+
+# 3. Edit environment files with your Supabase credentials
+# backend/.env and frontend/.env
+
+# 4. Run everything with one command
+python run.py
 ```
 
-### 2. Environment Setup
+### ⚡ **Manual Setup (Advanced)**
 
-Create a `.env` file in the root directory:
-
-```env
-# Supabase Configuration
-SUPABASE_URL=your_supabase_project_url
-SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-
-# Database
-DATABASE_URL=postgresql://postgres:[password]@db.supabase.co:5432/postgres
-
-# AI Services (Optional)
-OPENAI_API_KEY=your_openai_api_key
-ANTHROPIC_API_KEY=your_anthropic_api_key
-
-# Security
-SECRET_KEY=your_secret_key_here
-
-# Storage
-STORAGE_BUCKET=certificates
-MAX_FILE_SIZE=10485760
-
-# Development
-DEBUG=true
-```
-
-### 3. Supabase Setup
-
-1. Create a new Supabase project
-2. Run the database schema from `docs/database_schema.md`
-3. Set up storage bucket named "certificates"
-4. Configure RLS policies as documented
-
-### 4. Run with Docker Compose
-
+**1. Environment Setup:**
 ```bash
-# Start all services
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop services
-docker-compose down
-```
-
-### 5. Development Setup (Alternative)
-
-**Backend:**
-```bash
+# Backend environment
 cd backend
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Frontend environment  
+cd ../frontend
+npm install
 ```
 
-**Frontend:**
+**2. Start Services:**
 ```bash
-cd frontend
-npm install
+# Terminal 1 - Backend (from backend/ directory)
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Terminal 2 - Frontend (from frontend/ directory)
 npm start
 ```
+
+**3. Test Everything:**
+```bash
+# Run automated tests
+python scripts/test_setup.py
+```
+
+### 📊 **Access Points**
+- **Frontend UI**: http://localhost:3000
+- **Backend API**: http://localhost:8000  
+- **API Documentation**: http://localhost:8000/docs
+
+### 🔧 **Detailed Setup**
+For complete setup instructions including Supabase configuration, see **[SETUP_GUIDE.md](SETUP_GUIDE.md)**
 
 ## 📚 Usage
 

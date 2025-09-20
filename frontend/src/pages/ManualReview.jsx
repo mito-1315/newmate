@@ -9,21 +9,21 @@ const ManualReview = () => {
   const [selectedReview, setSelectedReview] = useState(null);
 
   useEffect(() => {
-    fetchPendingReviews();
-  }, [filter]);
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/reviews?status=${filter}&search=${searchTerm}`);
+        const data = await response.json();
+        setReviews(data.reviews || []);
+      } catch (error) {
+        console.error('Failed to fetch reviews:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [filter, searchTerm]);
 
-  const fetchPendingReviews = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/reviews?status=${filter}&search=${searchTerm}`);
-      const data = await response.json();
-      setReviews(data.reviews || []);
-    } catch (error) {
-      console.error('Failed to fetch reviews:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleReviewDecision = async (verificationId, approved, notes, correctedFields = null) => {
     try {
@@ -42,7 +42,9 @@ const ManualReview = () => {
 
       if (response.ok) {
         // Refresh the list
-        fetchPendingReviews();
+        const refreshResponse = await fetch(`/api/reviews?status=${filter}&search=${searchTerm}`);
+        const refreshData = await refreshResponse.json();
+        setReviews(refreshData.reviews || []);
         setSelectedReview(null);
       } else {
         throw new Error('Failed to submit review decision');
