@@ -28,7 +28,7 @@ const CertificateIssuance = () => {
     student_name: '',
     roll_no: '',
     course_name: '',
-    institution: '',
+    institution_name: '',
     department: '',
     year_of_passing: new Date().getFullYear().toString(),
     grade: '',
@@ -46,10 +46,15 @@ const CertificateIssuance = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setSingleCertData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    console.log(`Form field changed: ${name} = ${value}`);
+    setSingleCertData(prev => {
+      const newData = {
+        ...prev,
+        [name]: value
+      };
+      console.log('Updated form data:', newData);
+      return newData;
+    });
   };
 
   const handleImageUpload = (e) => {
@@ -65,24 +70,55 @@ const CertificateIssuance = () => {
     setError(null);
 
     try {
+      console.log('Starting certificate issuance...');
+      console.log('Certificate data:', singleCertData);
+      console.log('Certificate image:', certificateImage);
+      
+      // Validate required fields before sending
+      const requiredFields = ['student_name', 'course_name', 'institution_name'];
+      const missingFields = requiredFields.filter(field => !singleCertData[field]);
+      
+      if (missingFields.length > 0) {
+        throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+      }
+      
       const formData = new FormData();
       if (certificateImage) {
         formData.append('file', certificateImage);
+        console.log('File added to FormData');
+      } else {
+        console.log('No certificate image provided');
       }
       formData.append('certificate_data', JSON.stringify(singleCertData));
+      console.log('Certificate data added to FormData');
+      console.log('JSON stringified data:', JSON.stringify(singleCertData));
+      
+      // Debug: Check what's actually in FormData
+      console.log('FormData contents:');
+      for (let [key, value] of formData.entries()) {
+        console.log(`${key}:`, value);
+      }
 
+      console.log('Making request to /issue/certificate...');
       const response = await fetch('/issue/certificate', {
         method: 'POST',
         body: formData,
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+
       if (!response.ok) {
-        throw new Error(`Issuance failed: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`Issuance failed: ${response.statusText} - ${errorText}`);
       }
 
       const result = await response.json();
+      console.log('Success result:', result);
       setIssuanceResult(result);
     } catch (err) {
+      console.error('Certificate issuance error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -287,8 +323,8 @@ const CertificateIssuance = () => {
                   </label>
                   <input
                     type="text"
-                    name="institution"
-                    value={singleCertData.institution}
+                    name="institution_name"
+                    value={singleCertData.institution_name}
                     onChange={handleInputChange}
                     required
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
@@ -374,6 +410,19 @@ const CertificateIssuance = () => {
               )}
 
               <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    console.log('Current form data:', singleCertData);
+                    console.log('Required fields check:');
+                    console.log('student_name:', singleCertData.student_name);
+                    console.log('course_name:', singleCertData.course_name);
+                    console.log('institution_name:', singleCertData.institution_name);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Debug Form Data
+                </button>
                 <button
                   type="button"
                   onClick={() => window.history.back()}
@@ -479,15 +528,18 @@ const CertificateIssuance = () => {
             </div>
             <div className="p-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Certificate Image */}
+                {/* QR Code Certificate */}
                 <div>
-                  <h4 className="text-md font-medium text-gray-900 mb-4">Certificate Image</h4>
-                  <div className="border border-gray-200 rounded-lg p-4">
+                  <h4 className="text-md font-medium text-gray-900 mb-4">QR Certificate</h4>
+                  <div className="border border-gray-200 rounded-lg p-4 text-center">
                     <img
-                      src={issuanceResult.image_url}
-                      alt="Generated Certificate"
-                      className="w-full h-auto rounded"
+                      src={issuanceResult.certificate_image_url}
+                      alt="QR Certificate"
+                      className="max-w-md mx-auto h-auto rounded"
                     />
+                    <p className="mt-2 text-sm text-gray-600">
+                      Scan QR code to verify certificate authenticity
+                    </p>
                   </div>
                 </div>
 
@@ -526,15 +578,16 @@ const CertificateIssuance = () => {
 
                   {/* QR Code */}
                   <div className="mt-4">
-                    <h5 className="text-sm font-medium text-gray-900 mb-2">QR Code</h5>
-                    <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
-                      <img
-                        src={issuanceResult.qr_code_url}
-                        alt="QR Code"
-                        className="w-32 h-32 mx-auto"
-                      />
+                    <h5 className="text-sm font-medium text-gray-900 mb-2">Verification</h5>
+                    <div className="bg-white border border-gray-200 rounded-lg p-4">
+                      <p className="text-sm text-gray-600 mb-2">
+                        Verification URL:
+                      </p>
+                      <p className="text-xs font-mono bg-gray-100 p-2 rounded break-all">
+                        {issuanceResult.verification_url || 'Not available'}
+                      </p>
                       <p className="text-xs text-gray-500 mt-2">
-                        Scan to verify certificate
+                        Scan QR code above or visit URL to verify
                       </p>
                     </div>
                   </div>

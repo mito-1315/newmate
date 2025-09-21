@@ -103,7 +103,7 @@ def sign_data(data: str, private_key_pem: str) -> Tuple[str, str]:
         
         # Get public key
         public_key = private_key.public_key()
-        public_key_pem = public_key.public_key_bytes(
+        public_key_pem = public_key.public_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         ).decode('utf-8')

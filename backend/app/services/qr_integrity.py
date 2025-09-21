@@ -99,8 +99,10 @@ class QRIntegrityService:
             # Sign the payload
             signed_payload = await self._sign_qr_payload(qr_payload, institution_keys)
             
-            # Generate QR code image
-            qr_image_data = await self._generate_qr_image(signed_payload)
+            # Generate QR code image with just the verification URL
+            certificate_id = certificate_data.get("certificate_id")
+            verification_url = f"http://localhost:8000/verify/{certificate_id}/page"
+            qr_image_data = await self._generate_simple_qr(verification_url)
             
             logger.info(f"Generated QR code for certificate {certificate_data.get('certificate_id', 'unknown')}")
             
@@ -163,15 +165,21 @@ class QRIntegrityService:
                                include_verification_url: bool) -> Dict[str, Any]:
         """Create the core QR payload before signing"""
         try:
-            # Extract essential certificate information
+            # Extract comprehensive certificate information
             core_data = {
                 "certificate_id": certificate_data.get("certificate_id"),
                 "student_name": certificate_data.get("name") or certificate_data.get("student_name"),
+                "roll_no": certificate_data.get("roll_no"),
                 "course_name": certificate_data.get("course_name"),
                 "institution": certificate_data.get("institution"),
+                "institution_name": certificate_data.get("institution_name"),
+                "department": certificate_data.get("department"),
                 "issue_date": certificate_data.get("issue_date"),
                 "year": certificate_data.get("year"),
-                "grade": certificate_data.get("grade")
+                "grade": certificate_data.get("grade"),
+                "cgpa": certificate_data.get("cgpa"),
+                "status": certificate_data.get("status", "issued"),
+                "source": certificate_data.get("source", "digital")
             }
             
             # Remove None values
@@ -189,8 +197,8 @@ class QRIntegrityService:
             
             # Add verification URL if requested
             if include_verification_url:
-                verification_id = self._generate_verification_id(core_data)
-                payload["verification_url"] = f"{settings.API_VERSION}/verify/{verification_id}"
+                certificate_id = core_data.get("certificate_id")
+                payload["verification_url"] = f"http://localhost:8000/verify/{certificate_id}/page"
             
             # Add image hash if available
             if "image_hash" in certificate_data:
@@ -229,6 +237,37 @@ class QRIntegrityService:
             logger.error(f"QR payload signing failed: {str(e)}")
             raise
     
+    async def _generate_simple_qr(self, url: str) -> str:
+        """Generate a simple QR code with just a URL"""
+        try:
+            # Create QR code
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=self.qr_error_correction,
+                box_size=self.qr_box_size,
+                border=self.qr_border,
+            )
+            qr.add_data(url)
+            qr.make(fit=True)
+            
+            # Create QR code image
+            qr_img = qr.make_image(fill_color="black", back_color="white")
+            
+            # Convert to base64 data URL
+            img_buffer = io.BytesIO()
+            qr_img.save(img_buffer, format='PNG')
+            img_buffer.seek(0)
+            
+            import base64
+            img_base64 = base64.b64encode(img_buffer.getvalue()).decode()
+            data_url = f"data:image/png;base64,{img_base64}"
+            
+            return data_url
+            
+        except Exception as e:
+            logger.error(f"Simple QR generation failed: {str(e)}")
+            raise
+
     async def _generate_qr_image(self, signed_payload: Dict[str, Any]) -> str:
         """Generate QR code image from signed payload"""
         try:

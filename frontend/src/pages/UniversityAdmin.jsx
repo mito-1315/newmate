@@ -4,13 +4,14 @@ import { FileText, Upload, Download, Send, Plus, Eye, CheckCircle } from 'lucide
 const UniversityAdmin = () => {
   const [activeTab, setActiveTab] = useState('issue');
   const [formData, setFormData] = useState({
-    studentName: '',
-    rollNo: '',
-    courseName: '',
-    yearOfPassing: '',
+    student_name: '',
+    roll_no: '',
+    course_name: '',
+    institution_name: '',
+    year_of_passing: '',
     department: '',
     grade: '',
-    additionalFields: {}
+    additional_fields: {}
   });
   const [certificateImage, setCertificateImage] = useState(null);
   const [generatedCertificate, setGeneratedCertificate] = useState(null);
@@ -18,10 +19,15 @@ const UniversityAdmin = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    console.log(`Form field changed: ${name} = ${value}`);
+    setFormData(prev => {
+      const newData = {
+        ...prev,
+        [name]: value
+      };
+      console.log('Updated form data:', newData);
+      return newData;
+    });
   };
 
   const handleImageUpload = (e) => {
@@ -36,25 +42,44 @@ const UniversityAdmin = () => {
     setLoading(true);
 
     try {
+      console.log('Starting certificate issuance...');
+      console.log('Form data:', formData);
+      console.log('Certificate image:', certificateImage);
+      
+      // Validate required fields before sending
+      const requiredFields = ['student_name', 'course_name', 'institution_name'];
+      const missingFields = requiredFields.filter(field => !formData[field]);
+      
+      if (missingFields.length > 0) {
+        throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+      }
+      
       const formDataToSend = new FormData();
       formDataToSend.append('file', certificateImage);
       formDataToSend.append('certificate_data', JSON.stringify(formData));
-
+      
+      console.log('Making request to /issue/certificate...');
       const response = await fetch('/issue/certificate', {
         method: 'POST',
         body: formDataToSend,
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+
       if (response.ok) {
         const result = await response.json();
+        console.log('Success result:', result);
         setGeneratedCertificate(result);
         setActiveTab('preview');
       } else {
-        throw new Error('Failed to issue certificate');
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`Failed to issue certificate: ${response.statusText} - ${errorText}`);
       }
     } catch (error) {
       console.error('Error issuing certificate:', error);
-      alert('Failed to issue certificate. Please try again.');
+      alert(`Failed to issue certificate: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -167,8 +192,8 @@ const UniversityAdmin = () => {
                   </label>
                   <input
                     type="text"
-                    name="studentName"
-                    value={formData.studentName}
+                    name="student_name"
+                    value={formData.student_name}
                     onChange={handleInputChange}
                     required
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
@@ -182,8 +207,8 @@ const UniversityAdmin = () => {
                   </label>
                   <input
                     type="text"
-                    name="rollNo"
-                    value={formData.rollNo}
+                    name="roll_no"
+                    value={formData.roll_no}
                     onChange={handleInputChange}
                     required
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
@@ -197,8 +222,8 @@ const UniversityAdmin = () => {
                   </label>
                   <input
                     type="text"
-                    name="courseName"
-                    value={formData.courseName}
+                    name="course_name"
+                    value={formData.course_name}
                     onChange={handleInputChange}
                     required
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
@@ -208,12 +233,27 @@ const UniversityAdmin = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
+                    Institution Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="institution_name"
+                    value={formData.institution_name}
+                    onChange={handleInputChange}
+                    required
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="Enter institution name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
                     Year of Passing *
                   </label>
                   <input
                     type="number"
-                    name="yearOfPassing"
-                    value={formData.yearOfPassing}
+                    name="year_of_passing"
+                    value={formData.year_of_passing}
                     onChange={handleInputChange}
                     required
                     min="1900"

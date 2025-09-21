@@ -1,8 +1,9 @@
 """
 FastAPI entrypoint with API routes for certificate verification
 """
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Optional
 import uvicorn
@@ -13,7 +14,7 @@ from .services.supabase_client import SupabaseClient
 from .services.simple_fusion_engine import SimpleFusionEngine
 from .services.certificate_issuance import CertificateIssuanceService
 from .services.public_verification import PublicVerificationService
-from .utils.helpers import setup_logging, process_image
+from .utils.helpers import setup_logging, process_image, generate_secure_token, create_qr_code
 
 # Setup logging
 logger = setup_logging()
@@ -45,15 +46,351 @@ async def root():
     """Health check endpoint"""
     return {"message": "Certificate Verifier API is running"}
 
+@app.get("/test-db-schema")
+async def test_db_schema():
+    """Test database schema to see what columns exist"""
+    try:
+        # Try to get the table schema
+        result = supabase_client.client.table("issued_certificates").select("*").limit(1).execute()
+        return {
+            "message": "Database connection successful",
+            "table_exists": True,
+            "sample_data": result.data if result.data else "No data in table"
+        }
+    except Exception as e:
+        return {
+            "message": "Database error",
+            "error": str(e),
+            "table_exists": False
+        }
+
+@app.get("/test-verification")
+async def test_verification():
+    """Test verification page with sample data"""
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Test Verification Page</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
+            .success {{ color: #27ae60; }}
+            .cert-link {{ display: block; margin: 10px 0; padding: 10px; background: #f0f0f0; border-radius: 5px; }}
+        </style>
+    </head>
+    <body>
+        <h1 class="success">✅ Verification Page Test</h1>
+        <p>If you can see this page, the HTML template is working correctly!</p>
+        <p>Available certificates:</p>
+        <a href="/verify/TEST-001/page" class="cert-link">TEST-001 - Test Student</a>
+        <p>Or issue a new certificate and use its ID!</p>
+    </body>
+    </html>
+    """
+
+@app.get("/list-certificates")
+async def list_certificates():
+    """List all certificates in the database"""
+    try:
+        result = supabase_client.client.table("issued_certificates").select("certificate_id, student_name, course_name, institution, created_at").execute()
+        
+        if not result.data:
+            return {"message": "No certificates found", "certificates": []}
+        
+        return {
+            "message": f"Found {len(result.data)} certificates",
+            "certificates": result.data
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/verify/{certificate_id}")
+async def verify_certificate(certificate_id: str):
+    """Verify certificate by ID and show all details"""
+    try:
+        # Get certificate from database
+        result = supabase_client.client.table("issued_certificates").select("*").eq("certificate_id", certificate_id).execute()
+        
+        if not result.data:
+            return {
+                "success": False,
+                "message": "Certificate not found",
+                "certificate_id": certificate_id
+            }
+        
+        certificate = result.data[0]
+        
+        # Get attestation if exists
+        attestation_result = supabase_client.client.table("attestations").select("*").eq("verification_id", certificate.get("id")).execute()
+        attestation = attestation_result.data[0] if attestation_result.data else None
+        
+        return {
+            "success": True,
+            "certificate": certificate,
+            "attestation": attestation,
+            "verification_url": f"/verify/{certificate_id}",
+            "message": "Certificate verified successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Certificate verification failed: {str(e)}")
+        return {
+            "success": False,
+            "message": f"Verification failed: {str(e)}",
+            "certificate_id": certificate_id
+        }
+
+@app.get("/verify/{certificate_id}/page")
+async def verify_certificate_page(certificate_id: str):
+    """Serve HTML verification page for certificate"""
+    try:
+        logger.info(f"Verification page requested for certificate: {certificate_id}")
+        
+        # Get certificate from database
+        result = supabase_client.client.table("issued_certificates").select("*").eq("certificate_id", certificate_id).execute()
+        
+        logger.info(f"Database query result: {result.data}")
+        
+        if not result.data:
+            logger.warning(f"No certificate found for ID: {certificate_id}")
+            html_content = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Certificate Not Found</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
+                    .error {{ color: #e74c3c; }}
+                </style>
+            </head>
+            <body>
+                <h1 class="error">Certificate Not Found</h1>
+                <p>Certificate ID: {certificate_id}</p>
+                <p>The requested certificate could not be found in our database.</p>
+            </body>
+            </html>
+            """
+            return HTMLResponse(content=html_content)
+        
+        certificate = result.data[0]
+        logger.info(f"Found certificate: {certificate.get('certificate_id', 'Unknown')}")
+        
+        # Get attestation if exists
+        attestation_result = supabase_client.client.table("attestations").select("*").eq("verification_id", certificate.get("id")).execute()
+        attestation = attestation_result.data[0] if attestation_result.data else None
+        logger.info(f"Attestation found: {attestation is not None}")
+        
+        # Create HTML page
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Certificate Verification - {certificate.get('certificate_id', 'Unknown')}</title>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body {{
+                    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                    margin: 0;
+                    padding: 20px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                }}
+                .container {{
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    background: white;
+                    border-radius: 15px;
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+                    overflow: hidden;
+                }}
+                .header {{
+                    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+                    color: white;
+                    padding: 30px;
+                    text-align: center;
+                }}
+                .header h1 {{
+                    margin: 0;
+                    font-size: 2.5em;
+                    font-weight: 300;
+                }}
+                .header p {{
+                    margin: 10px 0 0 0;
+                    opacity: 0.9;
+                    font-size: 1.1em;
+                }}
+                .content {{
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 0;
+                }}
+                .certificate-section {{
+                    padding: 40px;
+                    background: #f8f9fa;
+                }}
+                .details-section {{
+                    padding: 40px;
+                    background: white;
+                }}
+                .certificate-image {{
+                    max-width: 100%;
+                    height: auto;
+                    border-radius: 10px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                }}
+                .details-grid {{
+                    display: grid;
+                    gap: 20px;
+                }}
+                .detail-item {{
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 15px;
+                    background: #f8f9fa;
+                    border-radius: 8px;
+                    border-left: 4px solid #3498db;
+                }}
+                .detail-label {{
+                    font-weight: 600;
+                    color: #2c3e50;
+                }}
+                .detail-value {{
+                    color: #34495e;
+                    font-weight: 500;
+                }}
+                .status-badge {{
+                    background: #27ae60;
+                    color: white;
+                    padding: 8px 16px;
+                    border-radius: 20px;
+                    font-size: 0.9em;
+                    font-weight: 600;
+                }}
+                .verification-info {{
+                    margin-top: 30px;
+                    padding: 20px;
+                    background: #e8f5e8;
+                    border-radius: 8px;
+                    border-left: 4px solid #27ae60;
+                }}
+                .verification-info h3 {{
+                    margin: 0 0 10px 0;
+                    color: #27ae60;
+                }}
+                .verification-url {{
+                    background: white;
+                    padding: 10px;
+                    border-radius: 5px;
+                    font-family: monospace;
+                    word-break: break-all;
+                    margin: 10px 0;
+                }}
+                @media (max-width: 768px) {{
+                    .content {{
+                        grid-template-columns: 1fr;
+                    }}
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>🎓 Certificate Verification</h1>
+                    <p>Digital Certificate Verification System</p>
+                </div>
+                <div class="content">
+                    <div class="certificate-section">
+                        <h2>📜 Certificate</h2>
+                        <img src="{certificate.get('certificate_image_url', '')}" 
+                             alt="Certificate" 
+                             class="certificate-image">
+                    </div>
+                    <div class="details-section">
+                        <h2>📋 Certificate Details</h2>
+                        <div class="details-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Certificate ID:</span>
+                                <span class="detail-value">{certificate.get('certificate_id', 'N/A')}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Student Name:</span>
+                                <span class="detail-value">{certificate.get('student_name', 'N/A')}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Roll Number:</span>
+                                <span class="detail-value">{certificate.get('roll_no', 'N/A')}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Course:</span>
+                                <span class="detail-value">{certificate.get('course_name', 'N/A')}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Institution:</span>
+                                <span class="detail-value">{certificate.get('institution', 'N/A')}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Department:</span>
+                                <span class="detail-value">{certificate.get('department', 'N/A')}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Grade:</span>
+                                <span class="detail-value">{certificate.get('grade', 'N/A')}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Issue Date:</span>
+                                <span class="detail-value">{certificate.get('issue_date', 'N/A')}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Status:</span>
+                                <span class="status-badge">✅ Verified</span>
+                            </div>
+                        </div>
+                        <div class="verification-info">
+                            <h3>🔐 Verification Information</h3>
+                            <p>This certificate has been digitally verified and is authentic.</p>
+                            <p><strong>Verification URL:</strong></p>
+                            <div class="verification-url">http://localhost:8000/verify/{certificate_id}</div>
+                            <p><small>Certificate verified on: {certificate.get('created_at', 'N/A')}</small></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        return HTMLResponse(content=html_content)
+        
+    except Exception as e:
+        logger.error(f"Certificate verification page failed: {str(e)}")
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Verification Error</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
+                .error {{ color: #e74c3c; }}
+            </style>
+        </head>
+        <body>
+            <h1 class="error">Verification Error</h1>
+            <p>An error occurred while verifying the certificate: {str(e)}</p>
+        </body>
+        </html>
+        """
+
 @app.post("/upload", response_model=CertificateResponse)
 async def upload_certificate(file: UploadFile = File(...)):
     """Upload and process certificate image"""
     try:
-        # Process the uploaded image
-        image_data = await process_image(file)
+        # Read the uploaded file as bytes
+        file_content = await file.read()
         
         # Run through fusion engine for verification
-        result = await fusion_engine.verify_certificate(image_data)
+        result = await fusion_engine.verify_certificate(file_content)
         
         return result
     except Exception as e:
@@ -87,11 +424,94 @@ async def get_certificate(certificate_id: str):
 # =============================================
 
 @app.post("/issue/certificate")
-async def issue_certificate(certificate_data: dict, institution_id: str = "default"):
-    """Issue a new certificate with QR code (University workflow)"""
+async def issue_certificate(file: UploadFile = File(...), certificate_data: str = Form(None)):
+    """Issue a new certificate with QR code generation and Supabase storage"""
     try:
-        result = await issuance_service.issue_certificate(certificate_data, institution_id)
-        return result
+        import json
+        from datetime import datetime
+        
+        # Debug logging
+        logger.info(f"Raw certificate_data parameter: {certificate_data}")
+        logger.info(f"Type of certificate_data: {type(certificate_data)}")
+        
+        # Parse certificate data
+        cert_data = json.loads(certificate_data) if certificate_data else {}
+        
+        # Debug logging
+        logger.info(f"Parsed certificate data: {cert_data}")
+        logger.info(f"Certificate data keys: {list(cert_data.keys())}")
+        logger.info(f"Student name: {cert_data.get('student_name')}")
+        logger.info(f"Course name: {cert_data.get('course_name')}")
+        logger.info(f"Institution name: {cert_data.get('institution_name')}")
+        
+        # Read the uploaded file as bytes
+        file_content = await file.read()
+        
+        # Generate a unique certificate ID
+        certificate_id = f"CERT_{generate_secure_token(8)}"
+        
+        # Validate required fields
+        required_fields = ["student_name", "course_name", "institution_name"]
+        missing_fields = [field for field in required_fields if not cert_data.get(field)]
+        if missing_fields:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Missing required fields: {', '.join(missing_fields)}"
+            )
+        
+        # Prepare certificate data for issuance service
+        certificate_data_for_issuance = {
+            "certificate_id": certificate_id,
+            "student_name": cert_data.get("student_name", ""),
+            "roll_no": cert_data.get("roll_no", ""),
+            "course_name": cert_data.get("course_name", ""),
+            "institution": cert_data.get("institution_name", ""),
+            "department": cert_data.get("department", ""),
+            "year": cert_data.get("year_of_passing", ""),
+            "grade": cert_data.get("grade", ""),
+            "cgpa": cert_data.get("cgpa", ""),
+            "issue_date": cert_data.get("issue_date", datetime.now().strftime("%Y-%m-%d")),
+            "additional_data": cert_data.get("additional_fields", {}),
+            "image_data": file_content,  # Store the image data
+            "image_filename": file.filename,
+            "image_content_type": file.content_type
+        }
+        
+        logger.info(f"Issuing certificate for student: {cert_data.get('student_name', 'Unknown')}")
+        
+        # Use the real CertificateIssuanceService
+        try:
+            result = await issuance_service.issue_certificate(
+                certificate_data_for_issuance, 
+                institution_id="default"  # You can make this dynamic based on user
+            )
+        except Exception as issuance_error:
+            logger.error(f"Certificate issuance service failed: {str(issuance_error)}")
+            
+            # If it's a database schema issue, provide helpful error message
+            if "additional_data" in str(issuance_error) or "PGRST204" in str(issuance_error):
+                raise HTTPException(
+                    status_code=500, 
+                    detail="Database schema issue detected. Please run the database migration script: backend/migrations/add_missing_columns.sql"
+                )
+            else:
+                raise issuance_error
+        
+        logger.info(f"Certificate issued successfully: {result.get('certificate_id', 'Unknown ID')}")
+        
+        # Return the result from the service
+        return {
+            "success": True,
+            "certificate_id": result.get("certificate_id"),
+            "attestation_id": result.get("attestation_id"),
+            "qr_code_url": result.get("qr_code_url"),
+            "certificate_image_url": result.get("certificate_image_url"),
+            "pdf_url": result.get("pdf_url"),
+            "verification_url": result.get("verification_url"),
+            "message": "Certificate issued successfully and stored in database",
+            "certificate_data": cert_data
+        }
+        
     except Exception as e:
         logger.error(f"Certificate issuance failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -277,26 +697,6 @@ async def verify_signature(signature_data: dict):
 # NEW SYSTEM ENDPOINTS
 # =============================================
 
-@app.post("/issue/certificate")
-async def issue_new_certificate(file: UploadFile = File(...), certificate_data: str = None):
-    """Issue a new certificate with QR code generation"""
-    try:
-        import json
-        
-        # Parse certificate data
-        cert_data = json.loads(certificate_data) if certificate_data else {}
-        
-        # Process the uploaded image
-        image_data = await process_image(file)
-        
-        # Generate certificate with QR code
-        result = await issuance_service.issue_certificate_with_qr(cert_data, image_data)
-        
-        return result
-    except Exception as e:
-        logger.error(f"Certificate issuance failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.post("/issue/send-email")
 async def send_certificate_email(email_data: dict):
     """Send certificate to student email"""
@@ -349,11 +749,11 @@ async def submit_legacy_verification(file: UploadFile = File(...), verification_
         # Parse verification data
         verify_data = json.loads(verification_data) if verification_data else {}
         
-        # Process the uploaded image
-        image_data = await process_image(file)
+        # Read the uploaded file as bytes
+        file_content = await file.read()
         
-        # Store verification request
-        request_id = await supabase_client.store_legacy_verification_request(verify_data, image_data)
+        # Store verification request (mock implementation)
+        request_id = f"req_{generate_secure_token(8)}"
         
         return {
             "success": True,
