@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { FileText, BarChart3, Users, Menu, X, Plus, Shield } from 'lucide-react';
+import { FileText, BarChart3, Users, Menu, X, Plus, Shield, Home, Award, CheckCircle } from 'lucide-react';
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 import StudentDashboard from './pages/StudentDashboard';
@@ -21,6 +21,7 @@ function App() {
   const [user, setUser] = useState(getStoredUser());
   const [userRole, setUserRole] = useState(user?.role || null);
   const [loading, setLoading] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     // Check for stored user on mount
@@ -90,8 +91,46 @@ function App() {
                 <Shield className="h-8 w-8 text-blue-600 mr-2" />
                 <span className="text-xl font-bold text-gray-900">Certificate Verifier</span>
               </div>
+              
+              {/* Role-based Navigation */}
               <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-700">
+                {userRole === 'university_admin' && (
+                  <>
+                    <div className="hidden md:flex items-center space-x-4">
+                      <a
+                        href="/admin/dashboard"
+                        className="text-sm text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md flex items-center"
+                      >
+                        <Home className="h-4 w-4 mr-1" />
+                        Dashboard
+                      </a>
+                      <a
+                        href="/admin/issue-certificate"
+                        className="text-sm text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md flex items-center"
+                      >
+                        <Award className="h-4 w-4 mr-1" />
+                        Issue Certificate
+                      </a>
+                      <a
+                        href="/admin/legacy-verification"
+                        className="text-sm text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md flex items-center"
+                      >
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        Legacy Verification
+                      </a>
+                    </div>
+                    
+                    {/* Mobile menu button */}
+                    <button
+                      onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                      className="md:hidden text-gray-700 hover:text-blue-600"
+                    >
+                      <Menu className="h-6 w-6" />
+                    </button>
+                  </>
+                )}
+                
+                <span className="text-sm text-gray-700 hidden sm:block">
                   Welcome, {user?.full_name} ({userRole})
                 </span>
                 <button
@@ -104,6 +143,38 @@ function App() {
             </div>
           </div>
         </nav>
+
+        {/* Mobile Navigation Menu */}
+        {mobileMenuOpen && userRole === 'university_admin' && (
+          <div className="md:hidden bg-white border-b border-gray-200">
+            <div className="px-4 py-2 space-y-1">
+              <a
+                href="/admin/dashboard"
+                className="block px-3 py-2 text-sm text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-md flex items-center"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <Home className="h-4 w-4 mr-2" />
+                Dashboard
+              </a>
+              <a
+                href="/admin/issue-certificate"
+                className="block px-3 py-2 text-sm text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-md flex items-center"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <Award className="h-4 w-4 mr-2" />
+                Issue Certificate
+              </a>
+              <a
+                href="/admin/legacy-verification"
+                className="block px-3 py-2 text-sm text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-md flex items-center"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Legacy Verification
+              </a>
+            </div>
+          </div>
+        )}
 
         <Routes>
           {/* Public routes */}

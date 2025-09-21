@@ -16,6 +16,7 @@ import {
   Eye,
   ArrowLeft
 } from 'lucide-react';
+import QRDisplayModal from '../components/QRDisplayModal';
 
 const CertificateIssuance = () => {
   const [activeTab, setActiveTab] = useState('single');
@@ -24,6 +25,8 @@ const CertificateIssuance = () => {
   const [error, setError] = useState(null);
   const [certificateDetails, setCertificateDetails] = useState(null);
   const [autoFetching, setAutoFetching] = useState(false);
+  const [qrDisplayOpen, setQrDisplayOpen] = useState(false);
+  const [selectedCertificate, setSelectedCertificate] = useState(null);
 
   // Single certificate form
   const [singleCertData, setSingleCertData] = useState({
@@ -164,17 +167,20 @@ const CertificateIssuance = () => {
       const formData = new FormData();
       formData.append('file', bulkFile);
 
-      const response = await fetch('/issue/bulk', {
+      const response = await fetch('/upload/bulk-csv', {
         method: 'POST',
         body: formData,
       });
 
       if (!response.ok) {
-        throw new Error(`Bulk issuance failed: ${response.statusText}`);
+        const errorData = await response.json();
+        console.error('Bulk upload error details:', errorData);
+        throw new Error(`Bulk issuance failed: ${errorData.detail || response.statusText}`);
       }
 
       const result = await response.json();
       setBulkResults(result);
+      setActiveTab('bulk-results');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -215,6 +221,16 @@ const CertificateIssuance = () => {
         alert('Failed to send email. Please try again.');
       }
     }
+  };
+
+  const handleOpenQRDisplay = (certificate) => {
+    setSelectedCertificate(certificate);
+    setQrDisplayOpen(true);
+  };
+
+  const handleCloseQRDisplay = () => {
+    setQrDisplayOpen(false);
+    setSelectedCertificate(null);
   };
 
   const tabs = [
@@ -515,8 +531,11 @@ const CertificateIssuance = () => {
                 <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
                   <h4 className="text-sm font-medium text-blue-800 mb-2">CSV Format Requirements:</h4>
                   <ul className="text-sm text-blue-700 list-disc list-inside space-y-1">
-                    <li>student_name, roll_no, course_name, year_of_passing, institution, department, grade</li>
+                    <li><strong>Required columns:</strong> student_na, course_na, institution</li>
+                    <li><strong>Optional columns:</strong> certificate, issue_date, year, grade</li>
                     <li>First row should contain column headers</li>
+                    <li>Column mapping: student_na → student_name, course_na → course_name</li>
+                    <li>Certificate IDs will be auto-generated if not provided</li>
                     <li>Maximum 1000 certificates per upload</li>
                   </ul>
                 </div>
@@ -527,21 +546,47 @@ const CertificateIssuance = () => {
                   </div>
                 )}
 
-                <div className="flex justify-end space-x-3">
+                <div className="flex justify-between">
                   <button
                     type="button"
-                    onClick={() => window.history.back()}
-                    className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    onClick={async () => {
+                      if (!bulkFile) return;
+                      try {
+                        const formData = new FormData();
+                        formData.append('file', bulkFile);
+                        const response = await fetch('/test-csv-parsing', {
+                          method: 'POST',
+                          body: formData,
+                        });
+                        const result = await response.json();
+                        console.log('CSV Test Results:', result);
+                        alert(`CSV Columns: ${result.columns?.join(', ')}\n\nCheck console for full details.`);
+                      } catch (err) {
+                        console.error('CSV test error:', err);
+                        alert('CSV test failed. Check console for details.');
+                      }
+                    }}
+                    disabled={!bulkFile}
+                    className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
                   >
-                    Cancel
+                    Test CSV Parsing
                   </button>
-                  <button
-                    type="submit"
-                    disabled={loading || !bulkFile}
-                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                  >
-                    {loading ? 'Processing...' : 'Upload & Process'}
-                  </button>
+                  <div className="flex space-x-3">
+                    <button
+                      type="button"
+                      onClick={() => window.history.back()}
+                      className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loading || !bulkFile}
+                      className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                    >
+                      {loading ? 'Processing...' : 'Upload & Process'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </form>
@@ -705,7 +750,123 @@ const CertificateIssuance = () => {
             </div>
           </div>
         )}
+
+        {activeTab === 'bulk-results' && bulkResults && (
+          <div className="bg-white shadow rounded-lg">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">Bulk Upload Results</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {bulkResults.message}
+              </p>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <CheckCircle className="h-8 w-8 text-green-500" />
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-green-800">Successful</p>
+                      <p className="text-2xl font-bold text-green-900">{bulkResults.results?.successful?.length || 0}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <AlertCircle className="h-8 w-8 text-red-500" />
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-red-800">Failed</p>
+                      <p className="text-2xl font-bold text-red-900">{bulkResults.results?.failed?.length || 0}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <FileText className="h-8 w-8 text-blue-500" />
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-blue-800">Total</p>
+                      <p className="text-2xl font-bold text-blue-900">{bulkResults.results?.total || 0}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {bulkResults.results?.successful?.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="text-lg font-medium text-gray-900 mb-4">Generated QR Certificates</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {bulkResults.results.successful.map((cert, index) => (
+                      <div key={index} className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+                        <div className="mb-3">
+                          <img
+                            src={cert.certificate_image_url || cert.qr_code_data}
+                            alt={`QR Certificate ${index + 1}`}
+                            className="w-32 h-32 mx-auto border border-gray-300 rounded"
+                          />
+                        </div>
+                        <div className="text-sm">
+                          <p className="font-medium text-gray-900 truncate">{cert.student_name}</p>
+                          <p className="text-gray-600 truncate">{cert.course_name}</p>
+                          <p className="text-xs text-gray-500 font-mono">{cert.certificate_id}</p>
+                          <p className="text-xs text-gray-400">Row {cert.row}</p>
+                        </div>
+                        <div className="mt-2">
+                          <button
+                            onClick={() => handleOpenQRDisplay(cert)}
+                            className="inline-flex items-center text-xs text-blue-600 hover:text-blue-800"
+                          >
+                            <Eye className="h-3 w-3 mr-1" />
+                            Verify
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {bulkResults.results?.failed?.length > 0 && (
+                <div>
+                  <h4 className="text-md font-medium text-gray-900 mb-3">Failed Certificates</h4>
+                  <div className="bg-red-50 rounded-lg p-4 max-h-64 overflow-y-auto">
+                    <div className="space-y-2">
+                      {bulkResults.results.failed.map((cert, index) => (
+                        <div key={index} className="flex justify-between items-center py-2 px-3 bg-white rounded border border-red-200">
+                          <div>
+                            <span className="text-sm font-medium text-gray-900">Row {cert.row}</span>
+                            <span className="text-sm text-red-600 ml-2">{cert.error}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-6 flex justify-between">
+                <button
+                  onClick={() => setActiveTab('bulk')}
+                  className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Upload More Certificates
+                </button>
+                <button
+                  onClick={() => setBulkResults(null)}
+                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Clear Results
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* QR Display Modal */}
+      <QRDisplayModal
+        isOpen={qrDisplayOpen}
+        onClose={handleCloseQRDisplay}
+        certificateData={selectedCertificate}
+      />
     </div>
   );
 };

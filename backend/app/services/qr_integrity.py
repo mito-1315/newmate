@@ -101,7 +101,13 @@ class QRIntegrityService:
             
             # Generate QR code image with just the verification URL
             certificate_id = certificate_data.get("certificate_id")
+            logger.info(f"QR Generation - Certificate ID: {certificate_id}")
+            logger.info(f"QR Generation - Certificate ID type: {type(certificate_id)}")
+            logger.info(f"QR Generation - Certificate ID repr: {repr(certificate_id)}")
+            
             verification_url = f"http://localhost:8000/verify/{certificate_id}/page"
+            logger.info(f"QR Generation - Verification URL: {verification_url}")
+            
             qr_image_data = await self._generate_simple_qr(verification_url)
             
             logger.info(f"Generated QR code for certificate {certificate_data.get('certificate_id', 'unknown')}")

@@ -1,313 +1,467 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  FileText, 
-  Plus, 
+  BarChart3, 
   Users, 
-  CheckCircle, 
-  Clock, 
-  AlertTriangle,
-  BarChart3,
-  Upload,
-  QrCode,
-  Download,
-  Send,
-  Building,
-  GraduationCap,
-  Award
+  Shield, 
+  AlertTriangle, 
+  TrendingUp, 
+  Building2, 
+  Eye, 
+  Ban,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Activity
 } from 'lucide-react';
 
 const AdminDashboard = () => {
+  const [stats, setStats] = useState(null);
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [verificationTrends, setVerificationTrends] = useState(null);
+  const [institutions, setInstitutions] = useState({});
+  const [blacklist, setBlacklist] = useState({ blacklisted_certificates: [], blacklisted_ips: [] });
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
-  const [stats, setStats] = useState({
-    total_certificates: 0,
-    issued_today: 0,
-    pending_verifications: 0,
-    verification_rate: 0
-  });
 
   useEffect(() => {
-    fetchDashboardStats();
+    fetchDashboardData();
   }, []);
 
-  const fetchDashboardStats = async () => {
+  const fetchDashboardData = async () => {
     try {
-      const response = await fetch('/analytics/verification-stats');
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
-      }
+      setLoading(true);
+      
+      // Fetch all dashboard data in parallel
+      const [statsRes, activityRes, trendsRes, institutionsRes, blacklistRes] = await Promise.all([
+        fetch('/admin/dashboard/stats'),
+        fetch('/admin/dashboard/recent-activity'),
+        fetch('/admin/dashboard/verification-trends'),
+        fetch('/admin/dashboard/institutions'),
+        fetch('/admin/dashboard/blacklist')
+      ]);
+
+      const [statsData, activityData, trendsData, institutionsData, blacklistData] = await Promise.all([
+        statsRes.json(),
+        activityRes.json(),
+        trendsRes.json(),
+        institutionsRes.json(),
+        blacklistRes.json()
+      ]);
+
+      setStats(statsData);
+      setRecentActivity(activityData.activities || []);
+      setVerificationTrends(trendsData);
+      setInstitutions(institutionsData.institutions || {});
+      setBlacklist(blacklistData);
+      
     } catch (error) {
-      console.error('Error fetching stats:', error);
+      console.error('Failed to fetch dashboard data:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const tabs = [
-    { id: 'overview', name: 'Overview', icon: BarChart3 },
-    { id: 'issue', name: 'Issue Certificates', icon: Plus },
-    { id: 'legacy', name: 'Legacy Verification', icon: Users },
-    { id: 'reports', name: 'Reports', icon: FileText },
-  ];
-
-  const statCards = [
-    {
-      title: 'Total Certificates',
-      value: stats.total_certificates || 0,
-      icon: FileText,
-      color: 'bg-blue-500',
-      change: '+12%'
-    },
-    {
-      title: 'Issued Today',
-      value: stats.issued_today || 0,
-      icon: Plus,
-      color: 'bg-green-500',
-      change: '+5%'
-    },
-    {
-      title: 'Pending Verifications',
-      value: stats.pending_verifications || 0,
-      icon: Clock,
-      color: 'bg-yellow-500',
-      change: '-2%'
-    },
-    {
-      title: 'Verification Rate',
-      value: `${Math.round((stats.verification_rate || 0) * 100)}%`,
-      icon: CheckCircle,
-      color: 'bg-purple-500',
-      change: '+3%'
+  const handleBlacklistCertificate = async (certificateId) => {
+    const reason = prompt('Enter reason for blacklisting:');
+    if (reason) {
+      try {
+        const response = await fetch('/admin/dashboard/blacklist-certificate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ certificate_id: certificateId, reason })
+        });
+        
+        if (response.ok) {
+          alert('Certificate blacklisted successfully');
+          fetchDashboardData(); // Refresh data
+        }
+      } catch (error) {
+        console.error('Failed to blacklist certificate:', error);
+      }
     }
-  ];
+  };
+
+  const handleBlacklistIP = async (ipAddress) => {
+    const reason = prompt('Enter reason for blacklisting IP:');
+    if (reason) {
+      try {
+        const response = await fetch('/admin/dashboard/blacklist-ip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ip_address: ipAddress, reason })
+        });
+        
+        if (response.ok) {
+          alert('IP blacklisted successfully');
+          fetchDashboardData(); // Refresh data
+        }
+      } catch (error) {
+        console.error('Failed to blacklist IP:', error);
+      }
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <Building className="h-8 w-8 text-blue-600" />
-              <span className="ml-2 text-xl font-bold text-gray-900">
-                University Admin Dashboard
-              </span>
-            </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-500">Welcome, Admin</span>
-            </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+          <p className="mt-2 text-gray-600">Monitor verification activity, detect fraud, and manage the system</p>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="mb-8">
+          <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <a
+              href="/admin/issue-certificate"
+              className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow border border-gray-200"
+            >
+              <div className="flex items-center">
+                <div className="p-3 bg-blue-100 rounded-lg">
+                  <svg className="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                  </svg>
+                </div>
+                <div className="ml-4">
+                  <h3 className="text-lg font-medium text-gray-900">Issue Certificate</h3>
+                  <p className="text-sm text-gray-500">Create new certificates</p>
+                </div>
+              </div>
+            </a>
+
+            <a
+              href="/admin/legacy-verification"
+              className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow border border-gray-200"
+            >
+              <div className="flex items-center">
+                <div className="p-3 bg-green-100 rounded-lg">
+                  <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                </div>
+                <div className="ml-4">
+                  <h3 className="text-lg font-medium text-gray-900">Legacy Verification</h3>
+                  <p className="text-sm text-gray-500">Review pending requests</p>
+                </div>
+              </div>
+            </a>
+
+            <a
+              href="/admin/dashboard"
+              className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow border border-gray-200 bg-blue-50"
+            >
+              <div className="flex items-center">
+                <div className="p-3 bg-blue-100 rounded-lg">
+                  <svg className="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                  </svg>
+                </div>
+                <div className="ml-4">
+                  <h3 className="text-lg font-medium text-gray-900">Dashboard</h3>
+                  <p className="text-sm text-gray-500">View analytics & monitoring</p>
+                </div>
+              </div>
+            </a>
           </div>
         </div>
-      </div>
 
-      {/* Navigation Tabs */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Navigation Tabs */}
+        <div className="mb-8">
           <nav className="flex space-x-8">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === tab.id
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <Icon className="h-4 w-4 inline mr-2" />
-                  {tab.name}
-                </button>
-              );
-            })}
+            {[
+              { id: 'overview', name: 'Overview', icon: BarChart3 },
+              { id: 'activity', name: 'Recent Activity', icon: Activity },
+              { id: 'trends', name: 'Fraud Detection', icon: TrendingUp },
+              { id: 'institutions', name: 'Institutions', icon: Building2 },
+              { id: 'blacklist', name: 'Blacklist', icon: Shield }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
+                  activeTab === tab.id
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <tab.icon className="h-4 w-4 mr-2" />
+                {tab.name}
+              </button>
+            ))}
           </nav>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'overview' && (
+        {/* Overview Tab */}
+        {activeTab === 'overview' && stats && (
           <div className="space-y-6">
-            {/* Stats Cards */}
+            {/* Key Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {statCards.map((stat, index) => {
-                const Icon = stat.icon;
-                return (
-                  <div key={index} className="bg-white rounded-lg shadow p-6">
+              <div className="bg-white overflow-hidden shadow rounded-lg">
+                <div className="p-5">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <Users className="h-6 w-6 text-blue-600" />
+                    </div>
+                    <div className="ml-5 w-0 flex-1">
+                      <dl>
+                        <dt className="text-sm font-medium text-gray-500 truncate">Total Certificates</dt>
+                        <dd className="text-lg font-medium text-gray-900">{stats.total_certificates}</dd>
+                      </dl>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white overflow-hidden shadow rounded-lg">
+                <div className="p-5">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <CheckCircle className="h-6 w-6 text-green-600" />
+                    </div>
+                    <div className="ml-5 w-0 flex-1">
+                      <dl>
+                        <dt className="text-sm font-medium text-gray-500 truncate">Successful Verifications</dt>
+                        <dd className="text-lg font-medium text-gray-900">{stats.successful_verifications}</dd>
+                      </dl>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white overflow-hidden shadow rounded-lg">
+                <div className="p-5">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <XCircle className="h-6 w-6 text-red-600" />
+                    </div>
+                    <div className="ml-5 w-0 flex-1">
+                      <dl>
+                        <dt className="text-sm font-medium text-gray-500 truncate">Failed Verifications</dt>
+                        <dd className="text-lg font-medium text-gray-900">{stats.failed_verifications}</dd>
+                      </dl>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white overflow-hidden shadow rounded-lg">
+                <div className="p-5">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <TrendingUp className="h-6 w-6 text-purple-600" />
+                    </div>
+                    <div className="ml-5 w-0 flex-1">
+                      <dl>
+                        <dt className="text-sm font-medium text-gray-500 truncate">Success Rate</dt>
+                        <dd className="text-lg font-medium text-gray-900">{stats.verification_success_rate}%</dd>
+                      </dl>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Activity Summary */}
+            <div className="bg-white shadow rounded-lg">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900">Recent Activity (Last 30 Days)</h3>
+              </div>
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600">{stats.recent_certificates}</div>
+                    <div className="text-sm text-gray-500">New Certificates</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">{stats.recent_verifications}</div>
+                    <div className="text-sm text-gray-500">Verification Attempts</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-purple-600">{stats.unique_institutions}</div>
+                    <div className="text-sm text-gray-500">Active Institutions</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Recent Activity Tab */}
+        {activeTab === 'activity' && (
+          <div className="bg-white shadow rounded-lg">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">Recent System Activity</h3>
+            </div>
+            <div className="divide-y divide-gray-200">
+              {recentActivity.map((activity, index) => (
+                <div key={index} className="px-6 py-4">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center">
-                      <div className={`p-3 rounded-full ${stat.color}`}>
-                        <Icon className="h-6 w-6 text-white" />
-                      </div>
-                      <div className="ml-4">
-                        <p className="text-sm font-medium text-gray-500">{stat.title}</p>
-                        <p className="text-2xl font-semibold text-gray-900">
-                          {typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value}
+                      {activity.type === 'certificate_issued' ? (
+                        <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                      ) : (
+                        <Eye className="h-5 w-5 text-blue-500 mr-3" />
+                      )}
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {activity.type === 'certificate_issued' 
+                            ? `Certificate issued: ${activity.data.certificate_id}`
+                            : `Verification attempt: ${activity.data.status}`
+                          }
                         </p>
-                        <p className="text-sm text-green-600">{stat.change}</p>
+                        <p className="text-sm text-gray-500">
+                          {activity.type === 'certificate_issued' 
+                            ? `${activity.data.student_name} - ${activity.data.institution}`
+                            : `IP: ${activity.data.ip_address}`
+                          }
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {new Date(activity.timestamp).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Fraud Detection Tab */}
+        {activeTab === 'trends' && verificationTrends && (
+          <div className="space-y-6">
+            {/* Suspicious Activity Alerts */}
+            <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+              <div className="flex items-center">
+                <AlertTriangle className="h-6 w-6 text-red-600 mr-3" />
+                <h3 className="text-lg font-medium text-red-800">Suspicious Activity Detected</h3>
+              </div>
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-red-700">Suspicious IPs: {verificationTrends.suspicious_ips.length}</p>
+                  <p className="text-sm text-red-700">Suspicious User Agents: {verificationTrends.suspicious_user_agents.length}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-red-700">Total Failed Attempts: {verificationTrends.total_failed_attempts}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Most Common IPs */}
+            <div className="bg-white shadow rounded-lg">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900">Most Common IP Addresses</h3>
+              </div>
+              <div className="divide-y divide-gray-200">
+                {verificationTrends.most_common_ips.map(([ip, count], index) => (
+                  <div key={index} className="px-6 py-3 flex justify-between items-center">
+                    <span className="text-sm font-mono text-gray-900">{ip}</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm text-gray-500">{count} attempts</span>
+                      <button
+                        onClick={() => handleBlacklistIP(ip)}
+                        className="text-red-600 hover:text-red-800 text-sm"
+                      >
+                        <Ban className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Institutions Tab */}
+        {activeTab === 'institutions' && (
+          <div className="bg-white shadow rounded-lg">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">Institution Statistics</h3>
+            </div>
+            <div className="divide-y divide-gray-200">
+              {Object.entries(institutions).map(([institution, data]) => (
+                <div key={institution} className="px-6 py-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900">{institution}</h4>
+                      <p className="text-sm text-gray-500">
+                        {data.total_certificates} total certificates, {data.recent_certificates} recent
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-gray-500">Status Breakdown:</div>
+                      <div className="flex space-x-4 text-xs">
+                        <span className="text-green-600">Issued: {data.status_breakdown.issued}</span>
+                        <span className="text-blue-600">Verified: {data.status_breakdown.verified}</span>
+                        <span className="text-red-600">Revoked: {data.status_breakdown.revoked}</span>
                       </div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-
-            {/* Quick Actions */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <button
-                  onClick={() => setActiveTab('issue')}
-                  className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <Plus className="h-8 w-8 text-blue-600 mr-3" />
-                  <div className="text-left">
-                    <div className="font-medium text-gray-900">Issue New Certificate</div>
-                    <div className="text-sm text-gray-500">Generate digital certificate with QR code</div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('legacy')}
-                  className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <Users className="h-8 w-8 text-green-600 mr-3" />
-                  <div className="text-left">
-                    <div className="font-medium text-gray-900">Review Legacy Certificates</div>
-                    <div className="text-sm text-gray-500">Verify and approve legacy requests</div>
-                  </div>
-                </button>
-
-                <button
-                  className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <Upload className="h-8 w-8 text-purple-600 mr-3" />
-                  <div className="text-left">
-                    <div className="font-medium text-gray-900">Bulk Upload</div>
-                    <div className="text-sm text-gray-500">Upload certificates from ERP/CSV</div>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {/* Recent Activity */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between py-3 border-b border-gray-100">
-                  <div className="flex items-center">
-                    <div className="p-2 bg-green-100 rounded-full">
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-900">Certificate issued for John Doe</p>
-                      <p className="text-sm text-gray-500">Computer Science - 2023</p>
-                    </div>
-                  </div>
-                  <span className="text-sm text-gray-500">2 minutes ago</span>
                 </div>
-
-                <div className="flex items-center justify-between py-3 border-b border-gray-100">
-                  <div className="flex items-center">
-                    <div className="p-2 bg-yellow-100 rounded-full">
-                      <Clock className="h-4 w-4 text-yellow-600" />
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-900">Legacy verification pending</p>
-                      <p className="text-sm text-gray-500">Jane Smith - Engineering</p>
-                    </div>
-                  </div>
-                  <span className="text-sm text-gray-500">1 hour ago</span>
-                </div>
-
-                <div className="flex items-center justify-between py-3">
-                  <div className="flex items-center">
-                    <div className="p-2 bg-blue-100 rounded-full">
-                      <QrCode className="h-4 w-4 text-blue-600" />
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-900">Certificate verified by employer</p>
-                      <p className="text-sm text-gray-500">ABC Company verified CS certificate</p>
-                    </div>
-                  </div>
-                  <span className="text-sm text-gray-500">3 hours ago</span>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
         )}
 
-        {activeTab === 'issue' && (
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Issue New Certificate</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                Enter student details to generate a digital certificate with QR code
-              </p>
-            </div>
-            <div className="p-6">
-              <div className="text-center py-12">
-                <Plus className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">Certificate Issuance Form</h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  This will redirect to the detailed certificate issuance page
-                </p>
-                <div className="mt-6">
-                  <a
-                    href="/admin/issue-certificate"
-                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Go to Certificate Issuance
-                  </a>
-                </div>
+        {/* Blacklist Tab */}
+        {activeTab === 'blacklist' && (
+          <div className="space-y-6">
+            {/* Blacklisted Certificates */}
+            <div className="bg-white shadow rounded-lg">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900">Blacklisted Certificates</h3>
+              </div>
+              <div className="divide-y divide-gray-200">
+                {blacklist.blacklisted_certificates.map((cert, index) => (
+                  <div key={index} className="px-6 py-4">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{cert.certificate_id}</p>
+                        <p className="text-sm text-gray-500">Reason: {cert.reason}</p>
+                        <p className="text-xs text-gray-400">Blacklisted: {new Date(cert.blacklisted_at).toLocaleString()}</p>
+                      </div>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        Blacklisted
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
-        )}
 
-        {activeTab === 'legacy' && (
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Legacy Certificate Verification</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                Review and verify legacy certificate requests from students
-              </p>
-            </div>
-            <div className="p-6">
-              <div className="text-center py-12">
-                <Users className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">Legacy Verification Queue</h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  This will redirect to the legacy verification management page
-                </p>
-                <div className="mt-6">
-                  <a
-                    href="/admin/legacy-verification"
-                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                  >
-                    <Users className="h-4 w-4 mr-2" />
-                    Go to Legacy Verification
-                  </a>
-                </div>
+            {/* Blacklisted IPs */}
+            <div className="bg-white shadow rounded-lg">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900">Blacklisted IP Addresses</h3>
               </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'reports' && (
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Reports & Analytics</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                View detailed reports and analytics for certificate management
-              </p>
-            </div>
-            <div className="p-6">
-              <div className="text-center py-12">
-                <FileText className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">Reports Coming Soon</h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  Detailed analytics and reporting features will be available soon
-                </p>
+              <div className="divide-y divide-gray-200">
+                {blacklist.blacklisted_ips.map((ip, index) => (
+                  <div key={index} className="px-6 py-4">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-sm font-mono text-gray-900">{ip.ip_address}</p>
+                        <p className="text-sm text-gray-500">Reason: {ip.reason}</p>
+                        <p className="text-xs text-gray-400">Blacklisted: {new Date(ip.blacklisted_at).toLocaleString()}</p>
+                      </div>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        Blacklisted
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

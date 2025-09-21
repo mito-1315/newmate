@@ -1,7 +1,7 @@
 """
 FastAPI entrypoint with API routes for certificate verification
 """
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -64,30 +64,114 @@ async def test_db_schema():
             "table_exists": False
         }
 
+@app.get("/test-simple-verify/{cert_id}")
+async def test_simple_verify(cert_id: str):
+    """Test simple verification without /RG suffix"""
+    try:
+        # Clean the certificate ID (remove any suffixes)
+        clean_cert_id = cert_id.split('/')[0] if '/' in cert_id else cert_id
+        logger.info(f"Testing verification for cleaned certificate ID: {clean_cert_id}")
+        
+        # Try to find the certificate
+        result = supabase_client.client.table("issued_certificates").select("*").eq("certificate_id", clean_cert_id).execute()
+        
+        if result.data:
+            certificate = result.data[0]
+            return {
+                "success": True,
+                "message": "Certificate found",
+                "certificate_id": certificate.get('certificate_id'),
+                "student_name": certificate.get('student_name'),
+                "verification_url": f"http://localhost:8000/verify/{clean_cert_id}/page"
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Certificate not found",
+                "searched_id": clean_cert_id,
+                "original_id": cert_id
+            }
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/test-verification")
 async def test_verification():
-    """Test verification page with sample data"""
-    html_content = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Test Verification Page</title>
-        <style>
-            body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
-            .success {{ color: #27ae60; }}
-            .cert-link {{ display: block; margin: 10px 0; padding: 10px; background: #f0f0f0; border-radius: 5px; }}
-        </style>
-    </head>
-    <body>
-        <h1 class="success">✅ Verification Page Test</h1>
-        <p>If you can see this page, the HTML template is working correctly!</p>
-        <p>Available certificates:</p>
-        <a href="/verify/TEST-001/page" class="cert-link">TEST-001 - Test Student</a>
-        <p>Or issue a new certificate and use its ID!</p>
-    </body>
-    </html>
-    """
-    return HTMLResponse(content=html_content)
+    """Test verification page with actual certificates from database"""
+    try:
+        # Get all certificates from database
+        result = supabase_client.client.table("issued_certificates").select("certificate_id, student_name, course_name").limit(10).execute()
+        certificates = result.data if result.data else []
+        
+        # Also get the latest certificate to check its QR code
+        latest_cert = supabase_client.client.table("issued_certificates").select("*").order("created_at", desc=True).limit(1).execute()
+        latest_cert_data = latest_cert.data[0] if latest_cert.data else None
+        
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Verification Test</title>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <script src="https://cdn.tailwindcss.com"></script>
+        </head>
+        <body class="min-h-screen bg-gray-50">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <h1 class="text-3xl font-bold text-gray-900 mb-6">✅ Verification Page Test</h1>
+                <p class="text-lg text-gray-600 mb-6">If you can see this page, the HTML template is working correctly!</p>
+                
+                <div class="bg-white shadow rounded-lg p-6 mb-6">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-4">Available Certificates in Database ({len(certificates)} found):</h2>
+                    <div class="space-y-2">
+        """
+        
+        for cert in certificates:
+            cert_id = cert.get('certificate_id', 'Unknown')
+            student_name = cert.get('student_name', 'Unknown')
+            course_name = cert.get('course_name', 'Unknown')
+            html_content += f"""
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded">
+                            <div class="flex-1">
+                                <span class="font-mono text-sm font-medium">{cert_id}</span>
+                                <span class="text-sm text-gray-600 ml-2">{student_name}</span>
+                                <span class="text-xs text-gray-500 ml-2">({course_name})</span>
+                            </div>
+                            <a href="/verify/{cert_id}/page" class="text-blue-600 hover:text-blue-800 text-sm font-medium px-3 py-1 bg-blue-100 rounded">Test Verify</a>
+                        </div>
+            """
+        
+        html_content += """
+                    </div>
+                </div>
+                
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                    <h3 class="font-semibold text-blue-900 mb-2">Test Instructions:</h3>
+                    <ol class="text-sm text-blue-800 space-y-1">
+                        <li>1. Click "Test Verify" next to any certificate above</li>
+                        <li>2. Or issue a new certificate and use its ID</li>
+                        <li>3. Check the browser console for debug logs</li>
+                    </ol>
+                </div>
+                
+                {f'''
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <h3 class="font-semibold text-yellow-900 mb-2">Latest Certificate Debug Info:</h3>
+                    <div class="text-sm text-yellow-800">
+                        <p><strong>Certificate ID:</strong> {latest_cert_data.get('certificate_id', 'None') if latest_cert_data else 'No certificates found'}</p>
+                        <p><strong>Student Name:</strong> {latest_cert_data.get('student_name', 'None') if latest_cert_data else 'No certificates found'}</p>
+                        <p><strong>Expected Verification URL:</strong> http://localhost:8000/verify/{latest_cert_data.get('certificate_id', 'N/A') if latest_cert_data else 'N/A'}/page</p>
+                        <p><strong>Created At:</strong> {latest_cert_data.get('created_at', 'None') if latest_cert_data else 'No certificates found'}</p>
+                    </div>
+                </div>
+                ''' if latest_cert_data else ''}
+            </div>
+        </body>
+        </html>
+        """
+        return HTMLResponse(content=html_content)
+        
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/list-certificates")
 async def list_certificates():
@@ -186,18 +270,56 @@ async def verify_certificate(certificate_id: str):
         }
 
 @app.get("/verify/{certificate_id}/page")
-async def verify_certificate_page(certificate_id: str):
+async def verify_certificate_page(certificate_id: str, request: Request = None):
     """Serve HTML verification page for certificate"""
     try:
-        logger.info(f"Verification page requested for certificate: {certificate_id}")
+        # Clean the certificate ID (remove any suffixes like /RG)
+        original_cert_id = certificate_id
+        clean_cert_id = certificate_id.split('/')[0] if '/' in certificate_id else certificate_id
         
-        # Get certificate from database
-        result = supabase_client.client.table("issued_certificates").select("*").eq("certificate_id", certificate_id).execute()
+        logger.info(f"Verification page requested for certificate: {original_cert_id}")
+        logger.info(f"Cleaned certificate ID: {clean_cert_id}")
+        logger.info(f"Certificate ID type: {type(clean_cert_id)}")
+        logger.info(f"Certificate ID value: {repr(clean_cert_id)}")
+        
+        # Log verification attempt
+        try:
+            client_ip = request.client.host if request else "unknown"
+            user_agent = request.headers.get("user-agent", "unknown") if request else "unknown"
+            
+            supabase_client.client.table("verification_logs").insert({
+                "certificate_id": clean_cert_id,
+                "verification_id": f"VER_{generate_secure_token(8)}",
+                "status": "pending",
+                "ip_address": client_ip,
+                "user_agent": user_agent,
+                "verification_method": "qr_scan"
+            }).execute()
+        except Exception as log_error:
+            logger.warning(f"Failed to log verification attempt: {log_error}")
+        
+        # Get certificate from database using cleaned ID
+        result = supabase_client.client.table("issued_certificates").select("*").eq("certificate_id", clean_cert_id).execute()
         
         logger.info(f"Database query result: {result.data}")
+        logger.info(f"Query executed for certificate_id: {certificate_id}")
+        
+        # Also try to find any certificates with similar IDs
+        all_certs = supabase_client.client.table("issued_certificates").select("certificate_id").limit(10).execute()
+        logger.info(f"Sample certificate IDs in database: {[c.get('certificate_id') for c in all_certs.data]}")
         
         if not result.data:
-            logger.warning(f"No certificate found for ID: {certificate_id}")
+            logger.warning(f"No certificate found for ID: {clean_cert_id} (original: {original_cert_id})")
+            
+            # Update verification log to failed
+            try:
+                supabase_client.client.table("verification_logs").update({
+                    "status": "failed",
+                    "error_message": "Certificate not found"
+                }).eq("certificate_id", clean_cert_id).execute()
+            except Exception as log_error:
+                logger.warning(f"Failed to update verification log: {log_error}")
+            
             html_content = f"""
                 <!DOCTYPE html>
                 <html>
@@ -214,9 +336,10 @@ async def verify_certificate_page(certificate_id: str):
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                             </svg>
                         </div>
-                        <h1 class="text-2xl font-bold text-red-900 mb-2">Certificate Not Found</h1>
-                        <p class="text-sm text-gray-600 mb-4">Certificate ID: <span class="font-mono bg-gray-100 px-2 py-1 rounded">{certificate_id}</span></p>
-                        <p class="text-sm text-gray-500">The requested certificate could not be found in our database.</p>
+                            <h1 class="text-2xl font-bold text-red-900 mb-2">Certificate Not Found</h1>
+                            <p class="text-sm text-gray-600 mb-2">Original ID: <span class="font-mono bg-gray-100 px-2 py-1 rounded">{original_cert_id}</span></p>
+                            <p class="text-sm text-gray-600 mb-4">Cleaned ID: <span class="font-mono bg-gray-100 px-2 py-1 rounded">{clean_cert_id}</span></p>
+                            <p class="text-sm text-gray-500">The requested certificate could not be found in our database.</p>
                     </div>
                 </body>
                 </html>
@@ -227,6 +350,14 @@ async def verify_certificate_page(certificate_id: str):
         logger.info(f"Found certificate: {certificate.get('certificate_id', 'Unknown')}")
         logger.info(f"Certificate ID type: {type(certificate.get('certificate_id'))}")
         logger.info(f"Certificate ID value: {repr(certificate.get('certificate_id'))}")
+        
+        # Update verification log to successful
+        try:
+            supabase_client.client.table("verification_logs").update({
+                "status": "verified"
+            }).eq("certificate_id", clean_cert_id).execute()
+        except Exception as log_error:
+            logger.warning(f"Failed to update verification log: {log_error}")
         
         # Get attestation if exists
         attestation_result = supabase_client.client.table("attestations").select("*").eq("verification_id", certificate.get("id")).execute()
@@ -371,7 +502,7 @@ async def verify_certificate_page(certificate_id: str):
                                         <p class="text-sm text-green-700 mb-2">This certificate has been digitally verified and is authentic.</p>
                                         <div class="text-xs text-green-600">
                                             <p><strong>Verification URL:</strong></p>
-                                            <p class="font-mono bg-white p-2 rounded border break-all">http://localhost:8000/verify/{certificate_id}/page</p>
+                                            <p class="font-mono bg-white p-2 rounded border break-all">http://localhost:8000/verify/{clean_cert_id}/page</p>
                                             <p class="mt-2">Certificate verified on: {certificate.get('created_at', 'N/A')}</p>
                                         </div>
                                     </div>
@@ -558,6 +689,397 @@ async def bulk_issue_certificates(certificates_data: dict, institution_id: str =
         return result
     except Exception as e:
         logger.error(f"Bulk certificate issuance failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/test-csv-parsing")
+async def test_csv_parsing(file: UploadFile = File(...)):
+    """Test CSV parsing and show column mapping"""
+    try:
+        import csv
+        import io
+        
+        # Read CSV content
+        content = await file.read()
+        csv_content = content.decode('utf-8')
+        
+        # Parse CSV
+        csv_reader = csv.DictReader(io.StringIO(csv_content))
+        csv_columns = csv_reader.fieldnames
+        
+        # Get first few rows
+        rows = []
+        for i, row in enumerate(csv_reader):
+            if i >= 3:  # Only get first 3 rows
+                break
+            rows.append(row)
+        
+        return {
+            "columns": csv_columns,
+            "sample_rows": rows,
+            "total_columns": len(csv_columns)
+        }
+        
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.post("/upload/bulk-csv")
+async def upload_bulk_csv(file: UploadFile = File(...), institution_id: str = "default"):
+    """Upload CSV file and process bulk certificate issuance"""
+    try:
+        import csv
+        import io
+        from datetime import datetime
+        
+        # Check file type
+        if not file.filename.endswith('.csv'):
+            raise HTTPException(status_code=400, detail="Only CSV files are allowed")
+        
+        # Read CSV content
+        content = await file.read()
+        csv_content = content.decode('utf-8')
+        
+        # Parse CSV
+        csv_reader = csv.DictReader(io.StringIO(csv_content))
+        certificates_data = []
+        
+        # Get the actual column names from CSV
+        csv_columns = csv_reader.fieldnames
+        logger.info(f"CSV columns found: {csv_columns}")
+        
+        # Map CSV columns to our expected fields (more flexible mapping)
+        column_mapping = {
+            'certificate': 'certificate_id',
+            'student_na': 'student_name',
+            'student': 'student_name', 
+            'n:': 'roll_no',
+            'course_na': 'course_name',
+            'course_': 'course_name',
+            'na': 'institution_name',
+            'institution': 'institution',
+            'issue_date': 'issue_date',
+            'issue_': 'issue_date',
+            'date': 'issue_date',
+            'year': 'year',
+            'grade': 'grade'
+        }
+        
+        # Try to find columns that match our expected fields (case-insensitive)
+        flexible_mapping = {}
+        for csv_col in csv_columns:
+            csv_col_lower = csv_col.lower().strip()
+            for expected_col, target_field in column_mapping.items():
+                if expected_col.lower() in csv_col_lower or csv_col_lower in expected_col.lower():
+                    flexible_mapping[csv_col] = target_field
+                    logger.info(f"Mapped '{csv_col}' -> '{target_field}'")
+                    break
+        
+        logger.info(f"Final column mapping: {flexible_mapping}")
+        
+        for row_num, row in enumerate(csv_reader, 1):
+            try:
+                # Map the row data to our expected format
+                cert_data = {}
+                
+                # Map columns using flexible mapping
+                for csv_col, our_field in flexible_mapping.items():
+                    if csv_col in row and row[csv_col].strip():
+                        cert_data[our_field] = row[csv_col].strip()
+                
+                # Also try direct column mapping as fallback
+                for csv_col, our_field in column_mapping.items():
+                    if csv_col in row and row[csv_col].strip() and our_field not in cert_data:
+                        cert_data[our_field] = row[csv_col].strip()
+                
+                # Handle special cases
+                if 'institution_name' in cert_data and 'institution' not in cert_data:
+                    cert_data['institution'] = cert_data['institution_name']
+                
+                # Generate certificate ID if not provided
+                if 'certificate_id' not in cert_data:
+                    cert_data['certificate_id'] = f"CERT_{generate_secure_token(8)}"
+                
+                # Set default values
+                cert_data.setdefault('issue_date', datetime.now().strftime("%Y-%m-%d"))
+                cert_data.setdefault('year', str(datetime.now().year))
+                cert_data.setdefault('grade', '')
+                cert_data.setdefault('roll_no', '')
+                
+                # Debug: Log the processed data for first few rows
+                if row_num <= 3:
+                    logger.info(f"Row {row_num} processed data: {cert_data}")
+                    logger.info(f"Row {row_num} raw CSV data: {row}")
+                
+                # Validate required fields
+                required_fields = ['student_name', 'course_name', 'institution']
+                missing_fields = [field for field in required_fields if not cert_data.get(field)]
+                
+                if missing_fields:
+                    logger.warning(f"Row {row_num}: Missing required fields: {missing_fields}")
+                    logger.warning(f"Row {row_num}: Available data: {list(cert_data.keys())}")
+                    continue
+                
+                certificates_data.append(cert_data)
+                
+            except Exception as row_error:
+                logger.error(f"Error processing row {row_num}: {str(row_error)}")
+                continue
+        
+        if not certificates_data:
+            raise HTTPException(status_code=400, detail="No valid certificate data found in CSV")
+        
+        logger.info(f"Processed {len(certificates_data)} certificates from CSV")
+        
+        # Call bulk issuance service
+        result = await issuance_service.bulk_issue_certificates(certificates_data, institution_id)
+        
+        return {
+            "success": True,
+            "message": f"Processed {len(certificates_data)} certificates",
+            "results": result
+        }
+        
+    except Exception as e:
+        logger.error(f"CSV upload and processing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"CSV processing failed: {str(e)}")
+
+# =============================================
+# ADMIN DASHBOARD ENDPOINTS
+# =============================================
+
+@app.get("/admin/dashboard/stats")
+async def get_admin_dashboard_stats():
+    """Get comprehensive admin dashboard statistics"""
+    try:
+        # Get total certificates issued
+        total_certificates = supabase_client.client.table("issued_certificates").select("id", count="exact").execute()
+        
+        # Get verification attempts
+        verification_attempts = supabase_client.client.table("verification_logs").select("id", count="exact").execute()
+        
+        # Get successful verifications
+        successful_verifications = supabase_client.client.table("verification_logs").select("id", count="exact").eq("status", "verified").execute()
+        
+        # Get failed verifications
+        failed_verifications = supabase_client.client.table("verification_logs").select("id", count="exact").eq("status", "failed").execute()
+        
+        # Get recent activity (last 30 days)
+        from datetime import datetime, timedelta
+        thirty_days_ago = (datetime.now() - timedelta(days=30)).isoformat()
+        
+        recent_certificates = supabase_client.client.table("issued_certificates").select("id", count="exact").gte("created_at", thirty_days_ago).execute()
+        
+        recent_verifications = supabase_client.client.table("verification_logs").select("id", count="exact").gte("created_at", thirty_days_ago).execute()
+        
+        # Get institutions count
+        institutions = supabase_client.client.table("issued_certificates").select("institution").execute()
+        unique_institutions = len(set(cert.get("institution") for cert in institutions.data if cert.get("institution")))
+        
+        return {
+            "total_certificates": total_certificates.count or 0,
+            "total_verifications": verification_attempts.count or 0,
+            "successful_verifications": successful_verifications.count or 0,
+            "failed_verifications": failed_verifications.count or 0,
+            "recent_certificates": recent_certificates.count or 0,
+            "recent_verifications": recent_verifications.count or 0,
+            "unique_institutions": unique_institutions,
+            "verification_success_rate": round((successful_verifications.count or 0) / max(verification_attempts.count or 1, 1) * 100, 2)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get admin dashboard stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/admin/dashboard/recent-activity")
+async def get_recent_activity(limit: int = 50):
+    """Get recent system activity for admin dashboard"""
+    try:
+        # Get recent certificate issuances
+        recent_certificates = supabase_client.client.table("issued_certificates").select("*").order("created_at", desc=True).limit(limit).execute()
+        
+        # Get recent verification attempts
+        recent_verifications = supabase_client.client.table("verification_logs").select("*").order("created_at", desc=True).limit(limit).execute()
+        
+        # Combine and sort by date
+        activities = []
+        
+        for cert in recent_certificates.data:
+            activities.append({
+                "type": "certificate_issued",
+                "timestamp": cert.get("created_at"),
+                "data": {
+                    "certificate_id": cert.get("certificate_id"),
+                    "student_name": cert.get("student_name"),
+                    "institution": cert.get("institution"),
+                    "status": cert.get("status")
+                }
+            })
+        
+        for verif in recent_verifications.data:
+            activities.append({
+                "type": "verification_attempt",
+                "timestamp": verif.get("created_at"),
+                "data": {
+                    "verification_id": verif.get("id"),
+                    "status": verif.get("status"),
+                    "ip_address": verif.get("ip_address"),
+                    "user_agent": verif.get("user_agent")
+                }
+            })
+        
+        # Sort by timestamp (most recent first)
+        activities.sort(key=lambda x: x["timestamp"], reverse=True)
+        
+        return {"activities": activities[:limit]}
+        
+    except Exception as e:
+        logger.error(f"Failed to get recent activity: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/admin/dashboard/verification-trends")
+async def get_verification_trends(days: int = 30):
+    """Get verification trends and patterns for fraud detection"""
+    try:
+        from datetime import datetime, timedelta
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+        
+        # Get verification data for the period
+        verifications = supabase_client.client.table("verification_logs").select("*").gte("created_at", start_date.isoformat()).lte("created_at", end_date.isoformat()).execute()
+        
+        # Analyze patterns
+        daily_stats = {}
+        ip_addresses = {}
+        user_agents = {}
+        failed_attempts = []
+        
+        for verif in verifications.data:
+            date = verif.get("created_at", "")[:10]  # Get date part
+            if date not in daily_stats:
+                daily_stats[date] = {"total": 0, "successful": 0, "failed": 0}
+            
+            daily_stats[date]["total"] += 1
+            if verif.get("status") == "verified":
+                daily_stats[date]["successful"] += 1
+            else:
+                daily_stats[date]["failed"] += 1
+                failed_attempts.append(verif)
+            
+            # Track IP addresses
+            ip = verif.get("ip_address")
+            if ip:
+                ip_addresses[ip] = ip_addresses.get(ip, 0) + 1
+            
+            # Track user agents
+            ua = verif.get("user_agent")
+            if ua:
+                user_agents[ua] = user_agents.get(ua, 0) + 1
+        
+        # Detect suspicious patterns
+        suspicious_ips = [ip for ip, count in ip_addresses.items() if count > 10]
+        suspicious_agents = [ua for ua, count in user_agents.items() if count > 5]
+        
+        return {
+            "daily_stats": daily_stats,
+            "suspicious_ips": suspicious_ips,
+            "suspicious_user_agents": suspicious_agents,
+            "total_failed_attempts": len(failed_attempts),
+            "most_common_ips": sorted(ip_addresses.items(), key=lambda x: x[1], reverse=True)[:10],
+            "most_common_user_agents": sorted(user_agents.items(), key=lambda x: x[1], reverse=True)[:10]
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get verification trends: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/admin/dashboard/institutions")
+async def get_institutions_stats():
+    """Get statistics by institution"""
+    try:
+        # Get all certificates grouped by institution
+        certificates = supabase_client.client.table("issued_certificates").select("institution, created_at, status").execute()
+        
+        institution_stats = {}
+        for cert in certificates.data:
+            inst = cert.get("institution", "Unknown")
+            if inst not in institution_stats:
+                institution_stats[inst] = {
+                    "total_certificates": 0,
+                    "recent_certificates": 0,
+                    "status_breakdown": {"issued": 0, "verified": 0, "revoked": 0}
+                }
+            
+            institution_stats[inst]["total_certificates"] += 1
+            institution_stats[inst]["status_breakdown"][cert.get("status", "issued")] += 1
+            
+            # Count recent certificates (last 30 days)
+            from datetime import datetime, timedelta
+            thirty_days_ago = (datetime.now() - timedelta(days=30)).isoformat()
+            if cert.get("created_at", "") >= thirty_days_ago:
+                institution_stats[inst]["recent_certificates"] += 1
+        
+        return {"institutions": institution_stats}
+        
+    except Exception as e:
+        logger.error(f"Failed to get institutions stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/admin/dashboard/blacklist")
+async def get_blacklist():
+    """Get blacklisted certificates and IPs"""
+    try:
+        # Get blacklisted certificates
+        blacklisted_certs = supabase_client.client.table("blacklisted_certificates").select("*").execute()
+        
+        # Get blacklisted IPs
+        blacklisted_ips = supabase_client.client.table("blacklisted_ips").select("*").execute()
+        
+        return {
+            "blacklisted_certificates": blacklisted_certs.data,
+            "blacklisted_ips": blacklisted_ips.data
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get blacklist: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/dashboard/blacklist-certificate")
+async def blacklist_certificate(certificate_id: str, reason: str):
+    """Add a certificate to the blacklist"""
+    try:
+        # Add to blacklist
+        result = supabase_client.client.table("blacklisted_certificates").insert({
+            "certificate_id": certificate_id,
+            "reason": reason,
+            "blacklisted_at": datetime.now().isoformat(),
+            "blacklisted_by": "admin"
+        }).execute()
+        
+        # Update certificate status
+        supabase_client.client.table("issued_certificates").update({
+            "status": "blacklisted"
+        }).eq("certificate_id", certificate_id).execute()
+        
+        return {"success": True, "message": f"Certificate {certificate_id} has been blacklisted"}
+        
+    except Exception as e:
+        logger.error(f"Failed to blacklist certificate: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/dashboard/blacklist-ip")
+async def blacklist_ip(ip_address: str, reason: str):
+    """Add an IP address to the blacklist"""
+    try:
+        result = supabase_client.client.table("blacklisted_ips").insert({
+            "ip_address": ip_address,
+            "reason": reason,
+            "blacklisted_at": datetime.now().isoformat(),
+            "blacklisted_by": "admin"
+        }).execute()
+        
+        return {"success": True, "message": f"IP {ip_address} has been blacklisted"}
+        
+    except Exception as e:
+        logger.error(f"Failed to blacklist IP: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # =============================================

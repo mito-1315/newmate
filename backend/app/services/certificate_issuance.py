@@ -67,10 +67,16 @@ class CertificateIssuanceService:
             logger.info(f"QR data URL generated: {qr_data_url[:100] if qr_data_url else 'None'}...")
             logger.info(f"Signed payload keys: {list(signed_payload.keys()) if signed_payload else 'None'}")
             
-            # Step 4: Store the original uploaded image
-            original_image_url = await self._store_original_image(
-                certificate_data.get("image_data"), certificate_data.get("image_filename", "certificate.jpg")
-            )
+            # Step 4: Store the original uploaded image (if available)
+            original_image_url = None
+            if certificate_data.get("image_data") and certificate_data.get("image_filename"):
+                try:
+                    original_image_url = await self._store_original_image(
+                        certificate_data.get("image_data"), certificate_data.get("image_filename", "certificate.jpg")
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to store original image: {str(e)}")
+                    original_image_url = None
             
             # Step 5: Generate QR-only image (no full certificate)
             certificate_image = await self._generate_qr_only_image(
@@ -90,7 +96,7 @@ class CertificateIssuanceService:
                 certificate_record, signed_payload, image_hashes
             )
             
-            # Step 9: Update certificate record with final data (use original image URL)
+            # Step 9: Update certificate record with final data (use original image URL if available)
             await self._finalize_certificate_record(
                 certificate_record["id"], original_image_url, image_hashes, attestation
             )
@@ -103,7 +109,7 @@ class CertificateIssuanceService:
                 "certificate_id": normalized_data["certificate_id"],
                 "status": "issued",
                 "certificate_image_url": qr_image_url,  # QR-only image for download
-                "original_image_url": original_image_url,  # Original uploaded image
+                "original_image_url": original_image_url,  # Original uploaded image (may be None)
                 "qr_code_data": qr_data_url,
                 "verification_url": verification_url,
                 "attestation": attestation,
@@ -134,8 +140,12 @@ class CertificateIssuanceService:
                     results["successful"].append({
                         "row": i + 1,
                         "certificate_id": result["certificate_id"],
+                        "student_name": cert_data.get("student_name", ""),
+                        "course_name": cert_data.get("course_name", ""),
                         "issuance_id": result["issuance_id"],
-                        "verification_url": result["verification_url"]
+                        "verification_url": result["verification_url"],
+                        "certificate_image_url": result.get("certificate_image_url"),
+                        "qr_code_data": result.get("qr_code_data")
                     })
                     
                 except Exception as e:
@@ -523,13 +533,19 @@ class CertificateIssuanceService:
         """Finalize certificate record with image and attestation data"""
         try:
             update_data = {
-                "status": "issued",
-                "image_url": image_url,
-                "image_hashes": image_hashes
+                "status": "issued"
             }
             
+            # Only add image data if available
+            if image_url:
+                update_data["image_url"] = image_url
+            if image_hashes:
+                update_data["image_hashes"] = image_hashes
+            
             result = self.supabase_client.client.table("issued_certificates").update(update_data).eq("id", certificate_id).execute()
-            logger.info(f"Updated certificate record with image URL: {image_url}")
+            logger.info(f"Updated certificate record with status: issued")
+            if image_url:
+                logger.info(f"Image URL: {image_url}")
             
         except Exception as e:
             logger.error(f"Failed to finalize certificate record: {str(e)}")
