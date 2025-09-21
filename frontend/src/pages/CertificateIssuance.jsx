@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Upload, 
   FileText, 
@@ -22,6 +22,8 @@ const CertificateIssuance = () => {
   const [issuanceResult, setIssuanceResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [certificateDetails, setCertificateDetails] = useState(null);
+  const [autoFetching, setAutoFetching] = useState(false);
 
   // Single certificate form
   const [singleCertData, setSingleCertData] = useState({
@@ -43,6 +45,34 @@ const CertificateIssuance = () => {
   // Bulk import
   const [bulkFile, setBulkFile] = useState(null);
   const [bulkResults, setBulkResults] = useState(null);
+
+  // Auto-fetch certificate details
+  const fetchCertificateDetails = async (certificateId) => {
+    if (!certificateId) return;
+    
+    setAutoFetching(true);
+    try {
+      const response = await fetch(`http://localhost:8000/certificate/${certificateId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setCertificateDetails(data);
+        console.log('Certificate details fetched:', data);
+      } else {
+        console.error('Failed to fetch certificate details');
+      }
+    } catch (error) {
+      console.error('Error fetching certificate details:', error);
+    } finally {
+      setAutoFetching(false);
+    }
+  };
+
+  // Auto-fetch when issuance result changes
+  useEffect(() => {
+    if (issuanceResult && issuanceResult.certificate_id) {
+      fetchCertificateDetails(issuanceResult.certificate_id);
+    }
+  }, [issuanceResult]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -154,10 +184,10 @@ const CertificateIssuance = () => {
 
   const handleDownloadCertificate = () => {
     if (issuanceResult?.pdf_url) {
-      const link = document.createElement('a');
+    const link = document.createElement('a');
       link.href = issuanceResult.pdf_url;
       link.download = `certificate_${singleCertData.roll_no}.pdf`;
-      link.click();
+    link.click();
     }
   };
 
@@ -225,7 +255,7 @@ const CertificateIssuance = () => {
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
-                <button
+              <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${
@@ -236,16 +266,16 @@ const CertificateIssuance = () => {
                 >
                   <Icon className="h-4 w-4 inline mr-2" />
                   {tab.name}
-                </button>
+              </button>
               );
             })}
-          </nav>
+            </nav>
         </div>
-      </div>
+          </div>
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'single' && (
+            {activeTab === 'single' && (
           <div className="bg-white shadow rounded-lg">
             <div className="px-6 py-4 border-b border-gray-200">
               <h3 className="text-lg font-medium text-gray-900">Issue Single Certificate</h3>
@@ -255,112 +285,112 @@ const CertificateIssuance = () => {
             </div>
             <form onSubmit={handleSingleSubmit} className="p-6 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
+              <div>
                   <label className="block text-sm font-medium text-gray-700">
                     Student Name *
-                  </label>
-                  <input
-                    type="text"
+                      </label>
+                      <input
+                        type="text"
                     name="student_name"
                     value={singleCertData.student_name}
                     onChange={handleInputChange}
-                    required
+                        required
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="Enter student's full name"
-                  />
-                </div>
+                      />
+                    </div>
 
-                <div>
+                    <div>
                   <label className="block text-sm font-medium text-gray-700">
                     Roll No / Registration ID *
-                  </label>
-                  <input
-                    type="text"
+                      </label>
+                      <input
+                        type="text"
                     name="roll_no"
                     value={singleCertData.roll_no}
                     onChange={handleInputChange}
-                    required
+                        required
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="Enter roll number"
-                  />
-                </div>
+                      />
+                    </div>
 
-                <div>
+                    <div>
                   <label className="block text-sm font-medium text-gray-700">
                     Course Name *
-                  </label>
-                  <input
-                    type="text"
+                      </label>
+                      <input
+                        type="text"
                     name="course_name"
                     value={singleCertData.course_name}
                     onChange={handleInputChange}
                     required
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="Enter course name"
-                  />
-                </div>
+                      />
+                    </div>
 
-                <div>
+                    <div>
                   <label className="block text-sm font-medium text-gray-700">
                     Year of Passing *
-                  </label>
-                  <input
+                      </label>
+                      <input
                     type="number"
                     name="year_of_passing"
                     value={singleCertData.year_of_passing}
                     onChange={handleInputChange}
-                    required
+                        required
                     min="1900"
                     max="2030"
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="Enter year"
-                  />
-                </div>
+                      />
+                    </div>
 
-                <div>
+                    <div>
                   <label className="block text-sm font-medium text-gray-700">
-                    Institution *
-                  </label>
-                  <input
-                    type="text"
+                        Institution *
+                      </label>
+                      <input
+                        type="text"
                     name="institution_name"
                     value={singleCertData.institution_name}
                     onChange={handleInputChange}
-                    required
+                        required
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="Enter institution name"
-                  />
-                </div>
+                      />
+                    </div>
 
-                <div>
+                    <div>
                   <label className="block text-sm font-medium text-gray-700">
                     Department
-                  </label>
-                  <input
+                      </label>
+                      <input
                     type="text"
                     name="department"
                     value={singleCertData.department}
                     onChange={handleInputChange}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="Enter department"
-                  />
-                </div>
+                      />
+                    </div>
 
-                <div>
+                    <div>
                   <label className="block text-sm font-medium text-gray-700">
                     Grade / CGPA
-                  </label>
-                  <input
-                    type="text"
+                      </label>
+                      <input
+                        type="text"
                     name="grade"
                     value={singleCertData.grade}
                     onChange={handleInputChange}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="Enter grade or CGPA"
-                  />
-                </div>
+                      />
+                    </div>
 
-                <div>
+                    <div>
                   <label className="block text-sm font-medium text-gray-700">
                     Issue Date
                   </label>
@@ -430,19 +460,19 @@ const CertificateIssuance = () => {
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={loading}
+                  <button
+                    type="submit"
+                    disabled={loading}
                   className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                >
+                  >
                   {loading ? 'Generating...' : 'Generate Certificate'}
-                </button>
+                  </button>
               </div>
             </form>
-          </div>
-        )}
+              </div>
+            )}
 
-        {activeTab === 'bulk' && (
+            {activeTab === 'bulk' && (
           <div className="bg-white shadow rounded-lg">
             <div className="px-6 py-4 border-b border-gray-200">
               <h3 className="text-lg font-medium text-gray-900">Bulk Certificate Upload</h3>
@@ -452,20 +482,20 @@ const CertificateIssuance = () => {
             </div>
             <form onSubmit={handleBulkSubmit} className="p-6">
               <div className="space-y-6">
-                <div>
+              <div>
                   <label className="block text-sm font-medium text-gray-700">
                     Upload CSV/Excel File
-                  </label>
+                    </label>
                   <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
                     <div className="space-y-1 text-center">
                       <Upload className="mx-auto h-12 w-12 text-gray-400" />
                       <div className="flex text-sm text-gray-600">
                         <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
                           <span>Upload file</span>
-                          <input
-                            type="file"
+                    <input
+                      type="file"
                             accept=".csv,.xlsx,.xls"
-                            onChange={(e) => setBulkFile(e.target.files[0])}
+                      onChange={(e) => setBulkFile(e.target.files[0])}
                             className="sr-only"
                             required
                           />
@@ -524,12 +554,13 @@ const CertificateIssuance = () => {
               <h3 className="text-lg font-medium text-gray-900">Certificate Preview</h3>
               <p className="mt-1 text-sm text-gray-500">
                 Review the generated certificate before finalizing
+                {autoFetching && <span className="ml-2 text-blue-600">🔄 Auto-fetching details...</span>}
               </p>
             </div>
             <div className="p-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* QR Code Certificate */}
-                <div>
+              <div>
                   <h4 className="text-md font-medium text-gray-900 mb-4">QR Certificate</h4>
                   <div className="border border-gray-200 rounded-lg p-4 text-center">
                     <img
@@ -549,23 +580,45 @@ const CertificateIssuance = () => {
                   <div className="bg-gray-50 rounded-lg p-4 space-y-3">
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-500">Student Name:</span>
-                      <span className="text-sm font-medium">{singleCertData.student_name}</span>
+                      <span className="text-sm font-medium">
+                        {certificateDetails?.student_name || singleCertData.student_name}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-500">Roll No:</span>
-                      <span className="text-sm font-medium">{singleCertData.roll_no}</span>
+                      <span className="text-sm font-medium">
+                        {certificateDetails?.roll_no || singleCertData.roll_no}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-500">Course:</span>
-                      <span className="text-sm font-medium">{singleCertData.course_name}</span>
+                      <span className="text-sm font-medium">
+                        {certificateDetails?.course_name || singleCertData.course_name}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-500">Institution:</span>
+                      <span className="text-sm font-medium">
+                        {certificateDetails?.institution || singleCertData.institution_name}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-500">Year:</span>
-                      <span className="text-sm font-medium">{singleCertData.year_of_passing}</span>
+                      <span className="text-sm font-medium">
+                        {certificateDetails?.year || singleCertData.year_of_passing}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-500">Grade:</span>
+                      <span className="text-sm font-medium">
+                        {certificateDetails?.grade || singleCertData.grade}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-500">Certificate ID:</span>
-                      <span className="text-sm font-medium font-mono">{issuanceResult.id}</span>
+                      <span className="text-sm font-medium font-mono">
+                        {certificateDetails?.certificate_id || issuanceResult.certificate_id}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-500">Status:</span>
@@ -584,11 +637,24 @@ const CertificateIssuance = () => {
                         Verification URL:
                       </p>
                       <p className="text-xs font-mono bg-gray-100 p-2 rounded break-all">
-                        {issuanceResult.verification_url || 'Not available'}
+                        {certificateDetails?.verification_url || issuanceResult.verification_url || 'Not available'}
                       </p>
                       <p className="text-xs text-gray-500 mt-2">
                         Scan QR code above or visit URL to verify
                       </p>
+                      {certificateDetails?.verification_url && (
+                        <div className="mt-2">
+                          <a 
+                            href={certificateDetails.verification_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                            className="inline-flex items-center text-xs text-blue-600 hover:text-blue-800"
+                          >
+                            <Eye className="h-3 w-3 mr-1" />
+                            Open Verification Page
+                          </a>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -627,7 +693,7 @@ const CertificateIssuance = () => {
           <div className="bg-white shadow rounded-lg">
             <div className="px-6 py-4 border-b border-gray-200">
               <h3 className="text-lg font-medium text-gray-900">Certificate Preview</h3>
-            </div>
+              </div>
             <div className="p-6">
               <div className="text-center py-12">
                 <Eye className="mx-auto h-12 w-12 text-gray-400" />

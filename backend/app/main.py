@@ -67,7 +67,7 @@ async def test_db_schema():
 @app.get("/test-verification")
 async def test_verification():
     """Test verification page with sample data"""
-    return """
+    html_content = """
     <!DOCTYPE html>
     <html>
     <head>
@@ -87,6 +87,7 @@ async def test_verification():
     </body>
     </html>
     """
+    return HTMLResponse(content=html_content)
 
 @app.get("/list-certificates")
 async def list_certificates():
@@ -103,6 +104,51 @@ async def list_certificates():
         }
     except Exception as e:
         return {"error": str(e)}
+
+@app.get("/certificate/{certificate_id}")
+async def get_certificate_details(certificate_id: str):
+    """Get detailed certificate information for frontend display"""
+    try:
+        logger.info(f"Fetching certificate details for: {certificate_id}")
+        
+        # Get certificate from database
+        result = supabase_client.client.table("issued_certificates").select("*").eq("certificate_id", certificate_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Certificate not found")
+        
+        certificate = result.data[0]
+        
+        # Get attestation if exists
+        attestation_result = supabase_client.client.table("attestations").select("*").eq("verification_id", certificate.get("id")).execute()
+        attestation = attestation_result.data[0] if attestation_result.data else None
+        
+        # Prepare response
+        response_data = {
+            "certificate_id": certificate.get("certificate_id"),
+            "student_name": certificate.get("student_name"),
+            "roll_no": certificate.get("roll_no"),
+            "course_name": certificate.get("course_name"),
+            "institution": certificate.get("institution"),
+            "department": certificate.get("department"),
+            "issue_date": certificate.get("issue_date"),
+            "year": certificate.get("year"),
+            "grade": certificate.get("grade"),
+            "cgpa": certificate.get("cgpa"),
+            "status": certificate.get("status"),
+            "certificate_image_url": certificate.get("certificate_image_url"),
+            "verification_url": f"http://localhost:8000/verify/{certificate_id}/page",
+            "created_at": certificate.get("created_at"),
+            "attestation": attestation
+        }
+        
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching certificate details: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching certificate: {str(e)}")
 
 @app.get("/verify/{certificate_id}")
 async def verify_certificate(certificate_id: str):
@@ -365,7 +411,7 @@ async def verify_certificate_page(certificate_id: str):
         
     except Exception as e:
         logger.error(f"Certificate verification page failed: {str(e)}")
-        return f"""
+        error_html = f"""
         <!DOCTYPE html>
         <html>
         <head>
@@ -381,6 +427,7 @@ async def verify_certificate_page(certificate_id: str):
         </body>
         </html>
         """
+        return HTMLResponse(content=error_html)
 
 @app.post("/upload", response_model=CertificateResponse)
 async def upload_certificate(file: UploadFile = File(...)):
