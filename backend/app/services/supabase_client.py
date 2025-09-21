@@ -93,13 +93,13 @@ class SupabaseClient:
             logger.info(f"Upload result: {result}")
             
             # Check if upload was successful
-            if result and not result.get('error'):
+            if result and hasattr(result, 'path') and result.path:
                 # Get public URL
                 public_url = self.client.storage.from_(self.storage_bucket).get_public_url(storage_path)
                 logger.info(f"Uploaded image: {storage_path}")
                 return public_url
             else:
-                error_msg = result.get('error', 'Unknown upload error') if result else 'No response from upload'
+                error_msg = getattr(result, 'error', 'Unknown upload error') if result else 'No response from upload'
                 raise Exception(f"Upload failed: {error_msg}")
                 
         except Exception as e:

@@ -564,7 +564,7 @@ const CertificateIssuance = () => {
                   <h4 className="text-md font-medium text-gray-900 mb-4">QR Certificate</h4>
                   <div className="border border-gray-200 rounded-lg p-4 text-center">
                     <img
-                      src={issuanceResult.certificate_image_url}
+                      src={issuanceResult.certificate_image_url || issuanceResult.image_url}
                       alt="QR Certificate"
                       className="max-w-md mx-auto h-auto rounded"
                     />
@@ -587,7 +587,7 @@ const CertificateIssuance = () => {
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-500">Roll No:</span>
                       <span className="text-sm font-medium">
-                        {certificateDetails?.roll_no || singleCertData.roll_no}
+                        {certificateDetails?.roll_number || singleCertData.roll_no}
                       </span>
                     </div>
                     <div className="flex justify-between">

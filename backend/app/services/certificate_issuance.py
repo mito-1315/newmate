@@ -67,27 +67,32 @@ class CertificateIssuanceService:
             logger.info(f"QR data URL generated: {qr_data_url[:100] if qr_data_url else 'None'}...")
             logger.info(f"Signed payload keys: {list(signed_payload.keys()) if signed_payload else 'None'}")
             
-            # Step 4: Generate QR-only image (no full certificate)
+            # Step 4: Store the original uploaded image
+            original_image_url = await self._store_original_image(
+                certificate_data.get("image_data"), certificate_data.get("image_filename", "certificate.jpg")
+            )
+            
+            # Step 5: Generate QR-only image (no full certificate)
             certificate_image = await self._generate_qr_only_image(
                 normalized_data, qr_data_url
             )
             
-            # Step 5: Calculate image fingerprints
+            # Step 6: Calculate image fingerprints for QR image
             image_hashes = await self._calculate_image_fingerprints(certificate_image)
             
-            # Step 6: Store certificate image and hashes
-            image_url = await self._store_certificate_image(
+            # Step 7: Store QR certificate image and hashes
+            qr_image_url = await self._store_certificate_image(
                 certificate_image, issuance_id, image_hashes
             )
             
-            # Step 7: Generate digital attestation
+            # Step 8: Generate digital attestation
             attestation = await self._create_digital_attestation(
                 certificate_record, signed_payload, image_hashes
             )
             
-            # Step 8: Update certificate record with final data
+            # Step 9: Update certificate record with final data (use original image URL)
             await self._finalize_certificate_record(
-                certificate_record["id"], image_url, image_hashes, attestation
+                certificate_record["id"], original_image_url, image_hashes, attestation
             )
             
             # Step 9: Generate public verification URL
@@ -97,7 +102,8 @@ class CertificateIssuanceService:
                 "issuance_id": issuance_id,
                 "certificate_id": normalized_data["certificate_id"],
                 "status": "issued",
-                "certificate_image_url": image_url,
+                "certificate_image_url": qr_image_url,  # QR-only image for download
+                "original_image_url": original_image_url,  # Original uploaded image
                 "qr_code_data": qr_data_url,
                 "verification_url": verification_url,
                 "attestation": attestation,
@@ -186,57 +192,25 @@ class CertificateIssuanceService:
                 "id": data["certificate_id"],  # Use 'id' as primary key
                 "certificate_id": data["certificate_id"],
                 "student_name": data["student_name"],
-                "roll_no": data.get("roll_no", ""),
+                "roll_number": data.get("roll_no", ""),
                 "course_name": data["course_name"],
                 "institution": data["institution"],
-                "institution_name": data.get("institution_name", data["institution"]),
-                "department": data.get("department", ""),
                 "issue_date": data.get("issue_date", datetime.now().strftime("%Y-%m-%d")),
                 "year": data.get("year", str(datetime.now().year)),
                 "grade": data.get("grade", ""),
-                "cgpa": data.get("cgpa", ""),
-                "additional_data": data.get("additional_data", {}),
-                "status": "issued",
-                "source": "digital"
+                "status": "issued"
             }
             
             logger.info(f"Certificate record prepared: {certificate_record}")
             
             # Insert into database
-            try:
-                # Try to insert with all fields first
-                try:
-                    result = self.supabase_client.client.table("issued_certificates").insert(certificate_record).execute()
-                except Exception as e:
-                    if "additional_data" in str(e) or "PGRST204" in str(e):
-                        # Fallback: insert without additional_data column
-                        logger.warning("additional_data column not found, inserting without it")
-                        fallback_record = {k: v for k, v in certificate_record.items() if k != "additional_data"}
-                        result = self.supabase_client.client.table("issued_certificates").insert(fallback_record).execute()
-                    else:
-                        raise e
-                
-                if result.data:
-                    return result.data[0]
-                else:
-                    raise Exception("Failed to store certificate record")
-            except Exception as db_error:
-                logger.error(f"Database insert failed: {str(db_error)}")
-                # Check if it's an RLS policy error
-                if "row-level security policy" in str(db_error) or "Unauthorized" in str(db_error):
-                    logger.warning("Database insert blocked by RLS policy, returning mock record")
-                else:
-                    logger.warning("Database insert failed for other reason, returning mock record")
-                
-                # Return a mock record so the certificate issuance can continue
-                return {
-                    "id": issuance_id,
-                    "certificate_id": data["certificate_id"],
-                    "student_name": data["student_name"],
-                    "course_name": data["course_name"],
-                    "institution": data["institution"],
-                    "status": "issued"
-                }
+            result = self.supabase_client.client.table("issued_certificates").insert(certificate_record).execute()
+            
+            if result.data:
+                logger.info(f"Certificate stored successfully: {result.data[0]}")
+                return result.data[0]
+            else:
+                raise Exception("Failed to store certificate record")
                 
         except Exception as e:
             logger.error(f"Failed to store certificate record: {str(e)}")
@@ -464,6 +438,18 @@ class CertificateIssuanceService:
             logger.error(f"Image fingerprinting failed: {str(e)}")
             return {}
     
+    async def _store_original_image(self, image_data: bytes, filename: str) -> str:
+        """Store the original uploaded certificate image"""
+        try:
+            # Upload original image to Supabase Storage
+            original_filename = f"certificates/original/{filename}"
+            image_url = await self.supabase_client.upload_certificate_image(image_data, original_filename)
+            logger.info(f"Original image stored: {image_url}")
+            return image_url
+        except Exception as e:
+            logger.error(f"Failed to store original image: {str(e)}")
+            raise
+
     async def _store_certificate_image(self, 
                                      image: Image.Image, 
                                      issuance_id: str,
@@ -512,7 +498,8 @@ class CertificateIssuanceService:
             attestation_data = {
                 "verification_id": certificate_record["id"],
                 "signature": signed_payload["signature"],
-                "public_key": signed_payload["public_key"]
+                "public_key": signed_payload["public_key"],
+                "payload": signed_payload["payload"]
             }
             
             attestation_id = await self.supabase_client.store_attestation(attestation_data)
@@ -536,10 +523,13 @@ class CertificateIssuanceService:
         """Finalize certificate record with image and attestation data"""
         try:
             update_data = {
-                "status": "issued"
+                "status": "issued",
+                "image_url": image_url,
+                "image_hashes": image_hashes
             }
             
-            self.supabase_client.client.table("issued_certificates").update(update_data).eq("id", certificate_id).execute()
+            result = self.supabase_client.client.table("issued_certificates").update(update_data).eq("id", certificate_id).execute()
+            logger.info(f"Updated certificate record with image URL: {image_url}")
             
         except Exception as e:
             logger.error(f"Failed to finalize certificate record: {str(e)}")
