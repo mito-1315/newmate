@@ -83,12 +83,19 @@ const CertificateIssuance = () => {
       }
       
       const formData = new FormData();
+      
+      // Always add a file - either the uploaded one or a placeholder
       if (certificateImage) {
         formData.append('file', certificateImage);
-        console.log('File added to FormData');
+        console.log('File added to FormData:', certificateImage.name);
       } else {
-        console.log('No certificate image provided');
+        // Create a minimal placeholder file
+        const placeholderBlob = new Blob(['placeholder'], { type: 'text/plain' });
+        const placeholderFile = new File([placeholderBlob], 'placeholder.txt', { type: 'text/plain' });
+        formData.append('file', placeholderFile);
+        console.log('Placeholder file added to FormData');
       }
+      
       formData.append('certificate_data', JSON.stringify(singleCertData));
       console.log('Certificate data added to FormData');
       console.log('JSON stringified data:', JSON.stringify(singleCertData));
@@ -117,6 +124,7 @@ const CertificateIssuance = () => {
       const result = await response.json();
       console.log('Success result:', result);
       setIssuanceResult(result);
+      setActiveTab('preview');
     } catch (err) {
       console.error('Certificate issuance error:', err);
       setError(err.message);
@@ -131,21 +139,50 @@ const CertificateIssuance = () => {
     setError(null);
 
     try {
+      console.log('Starting bulk certificate issuance...');
+      console.log('Bulk file:', bulkFile);
+      
+      if (!bulkFile) {
+        throw new Error('Please select a CSV file to upload');
+      }
+
       const formData = new FormData();
       formData.append('file', bulkFile);
+      formData.append('institution_id', 'default');
 
+      console.log('Making request to /issue/bulk...');
       const response = await fetch('/issue/bulk', {
         method: 'POST',
         body: formData,
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+
       if (!response.ok) {
-        throw new Error(`Bulk issuance failed: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`Bulk issuance failed: ${response.statusText} - ${errorText}`);
       }
 
       const result = await response.json();
+      console.log('Bulk success result:', result);
       setBulkResults(result);
+      
+      // Show appropriate success message based on results
+      const successCount = result.successful?.length || 0;
+      const failedCount = result.failed?.length || 0;
+      
+      if (successCount > 0 && failedCount === 0) {
+        alert(`🎉 Bulk processing completed successfully! All ${successCount} certificates were processed.${successCount > 0 ? '\n\n📝 Note: Running in development mode with mock certificates.' : ''}`);
+      } else if (successCount > 0 && failedCount > 0) {
+        alert(`⚠️ Bulk processing completed with mixed results!\n✅ ${successCount} certificates processed successfully\n❌ ${failedCount} certificates failed`);
+      } else if (failedCount > 0) {
+        alert(`❌ Bulk processing failed! ${failedCount} certificates could not be processed.`);
+      }
+      
     } catch (err) {
+      console.error('Bulk certificate issuance error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -485,7 +522,8 @@ const CertificateIssuance = () => {
                 <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
                   <h4 className="text-sm font-medium text-blue-800 mb-2">CSV Format Requirements:</h4>
                   <ul className="text-sm text-blue-700 list-disc list-inside space-y-1">
-                    <li>student_name, roll_no, course_name, year_of_passing, institution, department, grade</li>
+                    <li>Required columns: student_name, course_name, institution</li>
+                    <li>Optional columns: roll_no, year_of_passing, department, grade</li>
                     <li>First row should contain column headers</li>
                     <li>Maximum 1000 certificates per upload</li>
                   </ul>
@@ -494,6 +532,73 @@ const CertificateIssuance = () => {
                 {error && (
                   <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm">
                     {error}
+                  </div>
+                )}
+
+                {bulkResults && (
+                  <div className={`border rounded-md p-4 ${
+                    (bulkResults.successful?.length || 0) > 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+                  }`}>
+                    <h4 className={`text-sm font-medium mb-2 ${
+                      (bulkResults.successful?.length || 0) > 0 ? 'text-green-800' : 'text-red-800'
+                    }`}>
+                      Processing Results:
+                    </h4>
+                    <div className={`text-sm space-y-2 ${
+                      (bulkResults.successful?.length || 0) > 0 ? 'text-green-700' : 'text-red-700'
+                    }`}>
+                      <div>Total processed: {bulkResults.total}</div>
+                      <div>✅ Successful: {bulkResults.successful?.length || 0}</div>
+                      <div>❌ Failed: {bulkResults.failed?.length || 0}</div>
+                      
+                      {/* Show development mode notice for mock certificates */}
+                      {(bulkResults.successful?.length || 0) > 0 && (
+                        <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-blue-700 text-xs">
+                          📝 <strong>Development Mode:</strong> These are mock certificates for testing. 
+                          In production, they would be stored in the database with real QR codes.
+                        </div>
+                      )}
+                      
+                      {bulkResults.successful?.length > 0 && (
+                        <div className="mt-4">
+                          <h5 className="font-medium">Successfully processed certificates:</h5>
+                          <ul className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                            {bulkResults.successful.slice(0, 5).map((cert, index) => (
+                              <li key={index} className="text-xs flex justify-between">
+                                <span>Row {cert.row}: {cert.certificate_id}</span>
+                                <span className="text-blue-600 hover:underline cursor-pointer">
+                                  View
+                                </span>
+                              </li>
+                            ))}
+                            {bulkResults.successful.length > 5 && (
+                              <li className="text-xs font-medium">
+                                ... and {bulkResults.successful.length - 5} more
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {bulkResults.failed?.length > 0 && (
+                        <div className="mt-4">
+                          <h5 className="font-medium text-red-800">Failed certificates:</h5>
+                          <ul className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                            {bulkResults.failed.slice(0, 3).map((cert, index) => (
+                              <li key={index} className="text-xs">
+                                <div>Row {cert.row}: {cert.certificate_id}</div>
+                                <div className="text-red-600 pl-2">Error: {cert.error}</div>
+                              </li>
+                            ))}
+                            {bulkResults.failed.length > 3 && (
+                              <li className="text-xs font-medium">
+                                ... and {bulkResults.failed.length - 3} more errors
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -604,18 +709,18 @@ const CertificateIssuance = () => {
                 </button>
                 <div className="space-x-3">
                   <button
-                    onClick={handleDownloadCertificate}
-                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Download PDF
-                  </button>
-                  <button
                     onClick={handleSendToStudent}
                     className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
-                    <Send className="h-4 w-4 mr-2" />
                     Send to Student
+                    <Send className="h-4 w-4 ml-2" />
+                  </button>
+                  <button
+                    onClick={handleDownloadCertificate}
+                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  >
+                    Download PDF
+                    <Download className="h-4 w-4 ml-2" />
                   </button>
                 </div>
               </div>

@@ -1,0 +1,68 @@
+{
+    "successful": [
+        {
+            "row": 1,
+            "certificate_id": "BULK_qenPiGmlu3g",
+            "issuance_id": "mock_9MiZdDHj0Sk",
+            "verification_url": "http://localhost:8000/verify/BULK_qenPiGmlu3g"
+        },
+        {
+            "row": 2,
+            "certificate_id": "BULK_8VYxFT08PUk",
+            "issuance_id": "mock_dI2Gd0Oh7w4",
+            "verification_url": "http://localhost:8000/verify/BULK_8VYxFT08PUk"
+        },
+        {
+            "row": 3,
+            "certificate_id": "BULK_6YwsryRIBMY",
+            "issuance_id": "mock_i72RFJ61nsI",
+            "verification_url": "http://localhost:8000/verify/BULK_6YwsryRIBMY"
+        },
+        {
+            "row": 4,
+            "certificate_id": "BULK_A_f50m4xsWM",
+            "issuance_id": "mock_YL1BhZzJHiE",
+            "verification_url": "http://localhost:8000/verify/BULK_A_f50m4xsWM"
+        },
+        {
+            "row": 5,
+            "certificate_id": "BULK_2Op0ey-UfEw",
+            "issuance_id": "mock_8Yb-cHX3bxs",
+            "verification_url": "http://localhost:8000/verify/BULK_2Op0ey-UfEw"
+        },
+        {
+            "row": 6,
+            "certificate_id": "BULK_WPc-pzjAhBY",
+            "issuance_id": "mock_ef29Ii1tXOE",
+            "verification_url": "http://localhost:8000/verify/BULK_WPc-pzjAhBY"
+        },
+        {
+            "row": 7,
+            "certificate_id": "BULK_o3KypvwoU4I",
+            "issuance_id": "mock_GOZaAPUNc1U",
+            "verification_url": "http://localhost:8000/verify/BULK_o3KypvwoU4I"
+        },
+        {
+            "row": 8,
+            "certificate_id": "BULK_LTsuWv7XX14",
+            "issuance_id": "mock_Bde-NxHOIU0",
+            "verification_url": "http://localhost:8000/verify/BULK_LTsuWv7XX14"
+        },
+        {
+            "row": 9,
+            "certificate_id": "BULK_iT-FyC_Bt6Y",
+            "issuance_id": "mock_zGpzaS932Dg",
+            "verification_url": "http://localhost:8000/verify/BULK_iT-FyC_Bt6Y"
+        },
+        {
+            "row": 10,
+            "certificate_id": "BULK_hjeXGMELqE0",
+            "issuance_id": "mock_Ub5kCoxEVyc",
+            "verification_url": "http://localhost:8000/verify/BULK_hjeXGMELqE0"
+        }
+    ],
+    "failed": [],
+    "total": 10,
+    "report_url": "/api/reports/mock_bulk_pG857M-9K2A",
+    "processed_at": "2025-09-21T04:24:48.769019"
+}

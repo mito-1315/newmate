@@ -10,6 +10,7 @@ import Upload from './pages/Upload';
 import Dashboard from './pages/Dashboard';
 import ManualReview from './pages/ManualReview';
 import CertificateIssuance from './pages/CertificateIssuance';
+import OverallAdmin from './pages/OverallAdmin';
 
 // Simple authentication state management
 const getStoredUser = () => {
@@ -109,6 +110,9 @@ function App() {
           {/* Public routes */}
           <Route path="/verify/:attestationId" element={<PublicVerification />} />
           <Route path="/login" element={<Login onAuthSuccess={handleAuthSuccess} />} />
+          
+          {/* Overall Admin Dashboard - accessible to all authenticated users */}
+          <Route path="/overallAdmin/dashboard" element={<OverallAdmin />} />
           
           {/* University Admin routes */}
           <Route 

@@ -70,8 +70,43 @@ npm install react-qr-reader qr-scanner
    - Run the following SQL to create all tables:
 
 ```sql
+-- Create issued_certificates table (updated to match your schema)
+CREATE TABLE IF NOT EXISTS issued_certificates (
+    id TEXT PRIMARY KEY,
+    certificate_id TEXT NOT NULL,
+    student_name TEXT NOT NULL,
+    course_name TEXT NOT NULL,
+    institution TEXT NOT NULL,
+    issue_date DATE NOT NULL,
+    status TEXT DEFAULT 'issued',
+    image_url TEXT,
+    image_hashes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    roll_number TEXT,
+    year TEXT NOT NULL,
+    grade TEXT,
+    qr_code_data TEXT,
+    qr_code_hash TEXT,
+    digital_signature TEXT,
+    verification_url TEXT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    issued_by TEXT DEFAULT 'system',
+    CONSTRAINT issued_certificates_certificate_id_institution_key UNIQUE (certificate_id, institution)
+);
+
+-- Add missing columns that the backend expects
+ALTER TABLE issued_certificates 
+ADD COLUMN IF NOT EXISTS roll_no TEXT,
+ADD COLUMN IF NOT EXISTS department TEXT,
+ADD COLUMN IF NOT EXISTS cgpa TEXT,
+ADD COLUMN IF NOT EXISTS institution_name TEXT,
+ADD COLUMN IF NOT EXISTS additional_data JSONB DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'digital' CHECK (source IN ('digital', 'legacy_verified')),
+ADD COLUMN IF NOT EXISTS attestation_id TEXT,
+ADD COLUMN IF NOT EXISTS image_hashes JSONB;
+
 -- Create institutions table
-CREATE TABLE institutions (
+CREATE TABLE IF NOT EXISTS institutions (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     domain TEXT UNIQUE,
@@ -84,34 +119,13 @@ CREATE TABLE institutions (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create issued_certificates table
-CREATE TABLE issued_certificates (
-    id TEXT PRIMARY KEY,
-    certificate_id TEXT NOT NULL,
-    student_name TEXT NOT NULL,
-    roll_no TEXT,
-    course_name TEXT NOT NULL,
-    institution TEXT NOT NULL,
-    institution_id TEXT REFERENCES institutions(id),
-    issue_date DATE NOT NULL,
-    year TEXT,
-    grade TEXT,
-    additional_data JSONB,
-    status TEXT DEFAULT 'issued' CHECK (status IN ('issuing', 'issued', 'revoked', 'cancelled')),
-    image_url TEXT,
-    image_hashes JSONB,
-    attestation_id TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(certificate_id, institution)
-);
-
 -- Create verifications table
-CREATE TABLE verifications (
+CREATE TABLE IF NOT EXISTS verifications (
     id TEXT PRIMARY KEY,
-    status TEXT NOT NULL CHECK (status IN ('pending', 'verified', 'failed', 'requires_review', 'tampered', 'signature_invalid')),
-    layer_results JSONB,
-    risk_score JSONB,
+    verification_id TEXT UNIQUE NOT NULL,
+    attestation_id TEXT REFERENCES issued_certificates(attestation_id),
+    layer_results JSONB NOT NULL DEFAULT '{}',
+    risk_score JSONB NOT NULL DEFAULT '{}',
     database_check JSONB,
     integrity_checks JSONB,
     decision_rationale TEXT,
@@ -120,9 +134,7 @@ CREATE TABLE verifications (
     requires_manual_review BOOLEAN DEFAULT FALSE,
     review_notes TEXT,
     reviewer_id TEXT,
-    processed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    processing_time_total_ms FLOAT,
-    image_url TEXT,
+    processing_time_total_ms INTEGER,
     canonical_image_hash TEXT,
     original_filename TEXT,
     user_id TEXT,
@@ -131,19 +143,19 @@ CREATE TABLE verifications (
 );
 
 -- Create attestations table
-CREATE TABLE attestations (
-    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-    verification_id TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS attestations (
+    id TEXT PRIMARY KEY,
+    attestation_id TEXT UNIQUE NOT NULL,
+    certificate_id TEXT REFERENCES issued_certificates(id),
     signature TEXT NOT NULL,
     public_key TEXT NOT NULL,
-    payload JSONB NOT NULL,
     qr_code_url TEXT,
     pdf_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create audit_logs table
-CREATE TABLE audit_logs (
+CREATE TABLE IF NOT EXISTS audit_logs (
     id SERIAL PRIMARY KEY,
     action TEXT NOT NULL,
     user_id TEXT,
@@ -156,26 +168,24 @@ CREATE TABLE audit_logs (
 );
 
 -- Create indexes
-CREATE INDEX idx_issued_certificates_student_name ON issued_certificates(student_name);
-CREATE INDEX idx_issued_certificates_institution ON issued_certificates(institution);
-CREATE INDEX idx_issued_certificates_course_name ON issued_certificates(course_name);
-CREATE INDEX idx_issued_certificates_issue_date ON issued_certificates(issue_date);
-CREATE INDEX idx_issued_certificates_status ON issued_certificates(status);
-CREATE INDEX idx_verifications_status ON verifications(status);
-CREATE INDEX idx_verifications_processed_at ON verifications(processed_at);
-CREATE INDEX idx_attestations_verification_id ON attestations(verification_id);
+CREATE INDEX IF NOT EXISTS idx_issued_certificates_student_name ON issued_certificates(student_name);
+CREATE INDEX IF NOT EXISTS idx_issued_certificates_institution ON issued_certificates(institution);
+CREATE INDEX IF NOT EXISTS idx_issued_certificates_course_name ON issued_certificates(course_name);
+CREATE INDEX IF NOT EXISTS idx_issued_certificates_issue_date ON issued_certificates(issue_date);
+CREATE INDEX IF NOT EXISTS idx_issued_certificates_status ON issued_certificates(status);
+CREATE INDEX IF NOT EXISTS idx_verifications_status ON verifications(verification_id);
+CREATE INDEX IF NOT EXISTS idx_verifications_processed_at ON verifications(created_at);
+CREATE INDEX IF NOT EXISTS idx_attestations_verification_id ON attestations(attestation_id);
 
 -- Enable Row Level Security (RLS)
-ALTER TABLE institutions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE issued_certificates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE verifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE attestations ENABLE ROW LEVEL SECURITY;
 
 -- Create basic RLS policies (can be customized later)
-CREATE POLICY "Enable read access for all users" ON institutions FOR SELECT USING (true);
-CREATE POLICY "Enable read access for all users" ON issued_certificates FOR SELECT USING (true);
-CREATE POLICY "Enable read access for all users" ON verifications FOR SELECT USING (true);
-CREATE POLICY "Enable read access for all users" ON attestations FOR SELECT USING (true);
+CREATE POLICY IF NOT EXISTS "Enable read access for all users" ON issued_certificates FOR SELECT USING (true);
+CREATE POLICY IF NOT EXISTS "Enable read access for all users" ON verifications FOR SELECT USING (true);
+CREATE POLICY IF NOT EXISTS "Enable read access for all users" ON attestations FOR SELECT USING (true);
 ```
 
 4. **Set up Storage Bucket**

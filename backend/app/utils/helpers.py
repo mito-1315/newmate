@@ -6,6 +6,7 @@ import logging
 import qrcode
 import base64
 import io
+import os
 from datetime import datetime
 from typing import Dict, Any, Optional, Tuple
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -16,6 +17,11 @@ import json
 
 def setup_logging(log_level: str = "INFO") -> logging.Logger:
     """Setup logging configuration"""
+    # Create logs directory if it doesn't exist
+    logs_dir = "logs"
+    if not os.path.exists(logs_dir):
+        os.makedirs(logs_dir)
+    
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
